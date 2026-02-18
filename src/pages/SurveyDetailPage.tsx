@@ -1,11 +1,40 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, FileJson, MessageSquare, BarChart3, Copy, Check } from 'lucide-react';
+import {
+  ArrowLeft,
+  FileJson,
+  MessageSquare,
+  BarChart3,
+  Copy,
+  Check,
+  ListChecks,
+  CheckSquare,
+  Sliders,
+  Users,
+  Hash,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext.tsx';
 import { SurveyResponseForm } from '../components/response/SurveyResponseForm.tsx';
 import { TallyDashboard } from '../components/results/TallyDashboard.tsx';
+import {
+  METHOD_SINGLE_CHOICE,
+  METHOD_MULTI_SELECT,
+  METHOD_NUMERIC_RANGE,
+} from '../types/survey.ts';
 
 type Tab = 'respond' | 'results' | 'metadata';
+
+const METHOD_ICONS = {
+  [METHOD_SINGLE_CHOICE]: ListChecks,
+  [METHOD_MULTI_SELECT]: CheckSquare,
+  [METHOD_NUMERIC_RANGE]: Sliders,
+};
+
+const METHOD_LABELS = {
+  [METHOD_SINGLE_CHOICE]: 'Single Choice',
+  [METHOD_MULTI_SELECT]: 'Multi-Select',
+  [METHOD_NUMERIC_RANGE]: 'Numeric Range',
+};
 
 export function SurveyDetailPage() {
   const { surveyTxId } = useParams<{ surveyTxId: string }>();
@@ -18,12 +47,17 @@ export function SurveyDetailPage() {
 
   if (!survey) {
     return (
-      <div className="text-center py-20">
-        <p className="text-slate-400 mb-4">Survey not found</p>
+      <div className="text-center py-20 animate-fadeIn">
+        <div className="inline-flex p-4 bg-slate-800/50 rounded-2xl mb-4">
+          <Hash className="w-10 h-10 text-slate-600" />
+        </div>
+        <p className="text-slate-400 font-medium mb-1">Survey not found</p>
+        <p className="text-sm text-slate-500 mb-6">The survey you're looking for doesn't exist</p>
         <button
           onClick={() => navigate('/surveys')}
-          className="text-sm text-blue-400 hover:text-blue-300"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-600/20"
         >
+          <ArrowLeft className="w-4 h-4" />
           Back to surveys
         </button>
       </div>
@@ -32,6 +66,9 @@ export function SurveyDetailPage() {
 
   const responseCount =
     state.responses.get(survey.surveyTxId)?.length ?? 0;
+
+  const MethodIcon = METHOD_ICONS[survey.details.methodType as keyof typeof METHOD_ICONS] ?? Hash;
+  const methodLabel = METHOD_LABELS[survey.details.methodType as keyof typeof METHOD_LABELS] ?? 'Custom';
 
   const tabs: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
     { id: 'respond', label: 'Respond', icon: MessageSquare },
@@ -46,41 +83,65 @@ export function SurveyDetailPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       {/* Header */}
       <div className="flex items-start gap-4">
         <button
           onClick={() => navigate('/surveys')}
-          className="p-2 text-slate-400 hover:text-white transition-colors mt-1"
+          className="p-2 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-200 mt-1"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-2xl font-bold text-white mb-1">
+          {/* Method badge + eligibility */}
+          <div className="flex items-center gap-2 mb-3">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/20">
+              <MethodIcon className="w-3 h-3" />
+              {methodLabel}
+            </div>
+            {survey.details.eligibility && (
+              <div className="flex gap-1">
+                {survey.details.eligibility.map((role) => (
+                  <span
+                    key={role}
+                    className="text-[10px] px-2 py-0.5 rounded-md bg-slate-700/50 text-slate-400 font-medium border border-slate-600/30"
+                  >
+                    {role}
+                  </span>
+                ))}
+              </div>
+            )}
+            <span className="flex items-center gap-1 text-xs text-slate-500">
+              <Users className="w-3 h-3" />
+              {responseCount} responses
+            </span>
+          </div>
+
+          <h2 className="text-2xl font-bold text-white mb-2">
             {survey.details.title}
           </h2>
-          <p className="text-sm text-slate-400 mb-3">
+          <p className="text-sm text-slate-400 mb-4 leading-relaxed">
             {survey.details.description}
           </p>
 
           {/* Survey IDs */}
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <div className="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-md">
-              <span className="text-slate-500">TxId:</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="flex items-center gap-1.5 bg-slate-800/50 border border-slate-700/50 px-3 py-1.5 rounded-lg">
+              <span className="text-slate-500 font-medium">TxId</span>
               <code className="text-slate-300 font-mono">
-                {survey.surveyTxId.slice(0, 24)}...
+                {survey.surveyTxId.slice(0, 20)}...
               </code>
             </div>
             <button
               onClick={copyHash}
-              className="flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-md text-emerald-400 hover:text-emerald-300 transition-colors"
+              className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 transition-all duration-200"
             >
-              <span className="text-emerald-600">Hash:</span>
+              <span className="font-medium">Hash</span>
               <code className="font-mono">
-                {survey.surveyHash.slice(0, 24)}...
+                {survey.surveyHash.slice(0, 20)}...
               </code>
               {copied ? (
-                <Check className="w-3 h-3" />
+                <Check className="w-3 h-3 text-emerald-300" />
               ) : (
                 <Copy className="w-3 h-3" />
               )}
@@ -90,15 +151,15 @@ export function SurveyDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-800/50 p-1 rounded-xl border border-slate-700">
+      <div className="flex gap-1 bg-slate-800/30 p-1 rounded-xl border border-slate-700/50">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
               activeTab === id
                 ? 'bg-slate-700 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-300'
+                : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
             }`}
           >
             <Icon className="w-4 h-4" />
@@ -108,33 +169,37 @@ export function SurveyDetailPage() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'respond' && (
-        <SurveyResponseForm
-          survey={survey}
-          onSubmitted={() => setActiveTab('results')}
-        />
-      )}
+      <div className="animate-fadeIn">
+        {activeTab === 'respond' && (
+          <SurveyResponseForm
+            survey={survey}
+            onSubmitted={() => setActiveTab('results')}
+          />
+        )}
 
-      {activeTab === 'results' && <TallyDashboard survey={survey} />}
+        {activeTab === 'results' && <TallyDashboard survey={survey} />}
 
-      {activeTab === 'metadata' && (
-        <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-700">
-            <h4 className="text-sm font-medium text-slate-300">
-              Full Label 17 Metadata Payload
-            </h4>
+        {activeTab === 'metadata' && (
+          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-700/50 flex items-center gap-2">
+              <FileJson className="w-4 h-4 text-slate-500" />
+              <h4 className="text-sm font-semibold text-slate-300">
+                Full Label 17 Metadata Payload
+              </h4>
+            </div>
+            <pre className="p-5 text-xs font-mono text-slate-300 overflow-x-auto max-h-[600px] overflow-y-auto leading-relaxed">
+              {JSON.stringify(survey.metadataPayload, null, 2)}
+            </pre>
+            <div className="px-5 py-3 border-t border-slate-700/30 bg-emerald-500/5">
+              <p className="text-xs text-emerald-400 flex items-center gap-2">
+                <Hash className="w-3 h-3" />
+                <span className="font-semibold">surveyHash:</span>{' '}
+                <code className="font-mono">{survey.surveyHash}</code>
+              </p>
+            </div>
           </div>
-          <pre className="p-4 text-xs font-mono text-slate-300 overflow-x-auto max-h-[600px] overflow-y-auto">
-            {JSON.stringify(survey.metadataPayload, null, 2)}
-          </pre>
-          <div className="px-4 py-3 border-t border-slate-700/50 bg-emerald-500/5">
-            <p className="text-xs text-emerald-400">
-              <span className="font-medium">surveyHash:</span>{' '}
-              <code className="font-mono">{survey.surveyHash}</code>
-            </p>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

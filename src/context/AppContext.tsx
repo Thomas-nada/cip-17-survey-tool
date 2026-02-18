@@ -6,14 +6,16 @@
  * - Blockchain service instance
  * - Survey state management
  * - Wallet connection state (testnet mode)
+ * - Auto-seeding of simulated blockchain with demo data
  */
-import {
+import React, {
   createContext,
   useContext,
   useReducer,
   useMemo,
   useRef,
   useCallback,
+  useEffect,
   type ReactNode,
 } from 'react';
 import { SimulatedBlockchain } from '../services/SimulatedBlockchain.ts';
@@ -27,7 +29,7 @@ import type {
 } from '../types/survey.ts';
 
 // ─── Types ──────────────────────────────────────────────────────────
-type AppMode = 'simulated' | 'testnet';
+export type AppMode = 'simulated' | 'testnet';
 
 interface SurveyState {
   surveys: StoredSurvey[];
@@ -45,7 +47,8 @@ type SurveyAction =
   | { type: 'RESPONSES_LOADED'; payload: { surveyTxId: string; responses: StoredResponse[] } }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'CLEAR_STATE' };
+  | { type: 'CLEAR_STATE' }
+  | { type: 'BULK_LOAD'; payload: { surveys: StoredSurvey[]; responses: Map<string, StoredResponse[]> } };
 
 interface AppContextValue {
   mode: AppMode;
@@ -113,7 +116,17 @@ function surveyReducer(state: SurveyState, action: SurveyAction): SurveyState {
       return { ...state, error: action.payload };
 
     case 'CLEAR_STATE':
-      return { ...initialState };
+      return { ...initialState, responses: new Map(), tallies: new Map() };
+
+    case 'BULK_LOAD':
+      return {
+        ...state,
+        surveys: action.payload.surveys,
+        responses: action.payload.responses,
+        tallies: new Map(),
+        loading: false,
+        error: null,
+      };
 
     default:
       return state;
@@ -131,9 +144,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Keep simulated blockchain as singleton across re-renders
   const simulatedRef = useRef(new SimulatedBlockchain());
 
+  // Auto-seed simulated blockchain on mount
+  useEffect(() => {
+    if (mode === 'simulated') {
+      const seedResult = simulatedRef.current.seed();
+      dispatch({
+        type: 'BULK_LOAD',
+        payload: {
+          surveys: seedResult.surveys,
+          responses: seedResult.responses,
+        },
+      });
+    }
+  }, []); // Only on mount
+
   const setMode = useCallback((newMode: AppMode) => {
     setModeRaw(newMode);
-    dispatch({ type: 'CLEAR_STATE' });
+    if (newMode === 'simulated') {
+      // Re-load seed data when switching back to simulated
+      const seedResult = simulatedRef.current.seed();
+      dispatch({
+        type: 'BULK_LOAD',
+        payload: {
+          surveys: seedResult.surveys,
+          responses: seedResult.responses,
+        },
+      });
+    } else {
+      dispatch({ type: 'CLEAR_STATE' });
+    }
   }, []);
 
   const blockchain = useMemo<BlockchainService>(() => {
@@ -170,6 +209,3 @@ export function useApp(): AppContextValue {
   if (!ctx) throw new Error('useApp must be used within AppProvider');
   return ctx;
 }
-
-// Need React import for useState
-import React from 'react';

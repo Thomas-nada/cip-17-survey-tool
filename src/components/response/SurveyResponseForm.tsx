@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Send, AlertCircle } from 'lucide-react';
+import { Send, AlertCircle, CheckCircle2, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../../context/AppContext.tsx';
 import { validateSurveyResponse } from '../../utils/validation.ts';
@@ -26,6 +26,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
     details.numericConstraints?.minValue ?? 0
   );
   const [submitting, setSubmitting] = useState(false);
+  const [showPayload, setShowPayload] = useState(false);
 
   const method = details.methodType;
   const isOptionBased =
@@ -105,7 +106,10 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
         },
       });
 
-      toast.success('Response submitted!');
+      toast.success('Response submitted successfully!', {
+        icon: '\u2705',
+        duration: 3000,
+      });
       setSelectedIndices([]);
       onSubmitted?.();
     } catch (err) {
@@ -117,17 +121,31 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Question */}
-      <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-5">
-        <h3 className="text-lg font-semibold text-white mb-1">
+    <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
+      {/* Question card */}
+      <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
+        <h3 className="text-lg font-bold text-white mb-2">
           {details.question}
         </h3>
-        <p className="text-sm text-slate-400">{details.description}</p>
+        <p className="text-sm text-slate-400 leading-relaxed">{details.description}</p>
         {method === METHOD_MULTI_SELECT && (
-          <p className="text-xs text-blue-400 mt-2">
-            Select up to {details.maxSelections} options
-          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20">
+              Select up to {details.maxSelections} options
+            </span>
+            {selectedIndices.length > 0 && (
+              <span className="text-xs text-slate-500">
+                {selectedIndices.length} / {details.maxSelections} selected
+              </span>
+            )}
+          </div>
+        )}
+        {method === METHOD_SINGLE_CHOICE && (
+          <div className="mt-3">
+            <span className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20">
+              Choose one option
+            </span>
+          </div>
         )}
       </div>
 
@@ -136,35 +154,48 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
         <div className="space-y-2">
           {details.options.map((opt, index) => {
             const selected = selectedIndices.includes(index);
+            const isRadio = method === METHOD_SINGLE_CHOICE;
             return (
               <button
                 key={index}
                 type="button"
                 onClick={() => toggleOption(index)}
-                className={`w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
+                className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left group ${
                   selected
-                    ? 'border-blue-500 bg-blue-500/10'
-                    : 'border-slate-700 bg-slate-800/30 hover:border-slate-600'
+                    ? 'border-blue-500 bg-blue-500/10 shadow-sm shadow-blue-500/10'
+                    : 'border-slate-700/50 bg-slate-800/20 hover:border-slate-600 hover:bg-slate-800/40'
                 }`}
               >
+                {/* Radio / Checkbox indicator */}
                 <div
-                  className={`w-5 h-5 rounded-${
-                    method === METHOD_SINGLE_CHOICE ? 'full' : 'md'
-                  } border-2 flex items-center justify-center flex-shrink-0 ${
+                  className={`w-5 h-5 flex-shrink-0 flex items-center justify-center transition-all duration-200 ${
+                    isRadio ? 'rounded-full' : 'rounded-md'
+                  } ${
                     selected
-                      ? 'border-blue-500 bg-blue-500'
-                      : 'border-slate-600'
+                      ? 'bg-blue-500 border-2 border-blue-500'
+                      : 'border-2 border-slate-600 group-hover:border-slate-500'
                   }`}
                 >
-                  {selected && (
+                  {selected && isRadio && (
                     <div className="w-2 h-2 rounded-full bg-white" />
                   )}
+                  {selected && !isRadio && (
+                    <CheckCircle2 className="w-4 h-4 text-white" />
+                  )}
                 </div>
-                <span className="text-sm text-slate-200">
-                  <span className="text-slate-500 font-mono mr-2">
-                    [{index}]
+
+                <div className="flex-1 min-w-0">
+                  <span className={`text-sm font-medium transition-colors ${
+                    selected ? 'text-white' : 'text-slate-300 group-hover:text-white'
+                  }`}>
+                    {opt}
                   </span>
-                  {opt}
+                </div>
+
+                <span className={`text-xs font-mono transition-colors ${
+                  selected ? 'text-blue-400' : 'text-slate-600'
+                }`}>
+                  [{index}]
                 </span>
               </button>
             );
@@ -174,8 +205,17 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
 
       {/* Numeric input */}
       {isNumeric && details.numericConstraints && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
+        <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6 space-y-5">
+          <div className="text-center">
+            <div className="text-4xl font-bold font-mono text-white mb-1">
+              {numericValue.toLocaleString()}
+            </div>
+            <p className="text-xs text-slate-500">
+              {details.numericConstraints.step && `Step: ${details.numericConstraints.step}`}
+            </p>
+          </div>
+
+          <div>
             <input
               type="range"
               min={details.numericConstraints.minValue}
@@ -183,8 +223,16 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
               step={details.numericConstraints.step ?? 1}
               value={numericValue}
               onChange={(e) => setNumericValue(parseInt(e.target.value))}
-              className="flex-1 accent-blue-500"
+              className="w-full accent-blue-500"
             />
+            <div className="flex justify-between text-xs text-slate-500 mt-2 font-mono">
+              <span>{details.numericConstraints.minValue}</span>
+              <span>{details.numericConstraints.maxValue}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 justify-center">
+            <label className="text-xs text-slate-500">Direct input:</label>
             <input
               type="number"
               min={details.numericConstraints.minValue}
@@ -192,40 +240,45 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
               step={details.numericConstraints.step ?? 1}
               value={numericValue}
               onChange={(e) => setNumericValue(parseInt(e.target.value) || 0)}
-              className="w-24 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white text-center font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              className="w-28 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white text-center font-mono focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none"
             />
-          </div>
-          <div className="flex justify-between text-xs text-slate-500">
-            <span>{details.numericConstraints.minValue}</span>
-            <span>{details.numericConstraints.maxValue}</span>
           </div>
         </div>
       )}
 
-      {/* Response payload preview */}
-      <div className="bg-slate-800/30 border border-slate-700/50 rounded-lg p-3">
-        <p className="text-xs font-medium text-slate-500 mb-1">
-          Response Payload
-        </p>
-        <pre className="text-xs font-mono text-slate-400 overflow-x-auto">
-          {JSON.stringify(
-            {
-              17: {
-                msg: [`Response to ${survey.details.title}`],
-                surveyResponse: response,
-              },
-            },
-            null,
-            2
-          )}
-        </pre>
+      {/* Response payload preview (collapsible) */}
+      <div className="bg-slate-800/20 border border-slate-700/30 rounded-xl overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowPayload(!showPayload)}
+          className="w-full flex items-center justify-between px-4 py-3 text-xs font-semibold text-slate-500 hover:text-slate-400 transition-colors"
+        >
+          <span>Response Metadata Payload</span>
+          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showPayload ? 'rotate-180' : ''}`} />
+        </button>
+        {showPayload && (
+          <div className="px-4 pb-3 animate-slideDown">
+            <pre className="text-xs font-mono text-slate-400 overflow-x-auto bg-slate-900/30 rounded-lg p-3">
+              {JSON.stringify(
+                {
+                  17: {
+                    msg: [`Response to ${survey.details.title}`],
+                    surveyResponse: response,
+                  },
+                },
+                null,
+                2
+              )}
+            </pre>
+          </div>
+        )}
       </div>
 
       {/* Validation errors */}
       {!validation.valid && selectedIndices.length > 0 && (
-        <div className="flex items-center gap-2 text-xs text-red-400">
-          <AlertCircle className="w-3.5 h-3.5" />
-          {validation.errors[0]}
+        <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 animate-fadeIn">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{validation.errors[0]}</span>
         </div>
       )}
 
@@ -233,10 +286,10 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       <button
         type="submit"
         disabled={!validation.valid || submitting}
-        className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all ${
+        className={`w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
           validation.valid && !submitting
-            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20'
-            : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 hover:shadow-emerald-500/25 hover:-translate-y-0.5 active:translate-y-0'
+            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
         }`}
       >
         <Send className="w-4 h-4" />
