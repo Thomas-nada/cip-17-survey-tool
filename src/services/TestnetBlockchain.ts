@@ -18,12 +18,14 @@ import { BlockfrostClient } from './BlockfrostClient.ts';
 import { computeSurveyHash } from '../utils/hashing.ts';
 import { validateSurveyDetails } from '../utils/validation.ts';
 import { METADATA_LABEL } from '../constants/methodTypes.ts';
-import { BrowserWallet, MeshTxBuilder } from '@meshsdk/core';
+import {
+  BrowserWallet,
+  Transaction,
+} from '@meshsdk/core';
 
 // ─── Cardano Metadata Helpers ───────────────────────────────────────
 // Cardano transaction metadata strings must be ≤64 bytes.
 // Longer strings are split into arrays of ≤64-byte chunks.
-// This is the standard approach (same pattern as CIP-20 messages).
 
 const MAX_METADATA_STRING_BYTES = 64;
 
@@ -55,8 +57,9 @@ function chunkString(str: string, maxBytes: number): string[] {
  * Recursively prepare a JS value for Cardano transaction metadata.
  * - Strings >64 bytes → array of ≤64 byte chunks
  * - Arrays → recursively process elements
- * - Objects → recursively process values (keys are also chunked if needed)
+ * - Objects → recursively process values
  * - Numbers, booleans → pass through (booleans as 0/1 integers)
+ * - undefined/null → stripped from objects (not valid in Cardano metadata)
  */
 function toCardanoMetadata(value: unknown): unknown {
   if (value === null || value === undefined) {
@@ -67,8 +70,6 @@ function toCardanoMetadata(value: unknown): unknown {
     return chunks.length === 1 ? chunks[0] : chunks;
   }
   if (typeof value === 'number') {
-    // Cardano metadata supports integers natively.
-    // Floats are not supported — convert to string if fractional.
     if (Number.isInteger(value)) return value;
     return String(value);
   }
@@ -82,12 +83,12 @@ function toCardanoMetadata(value: unknown): unknown {
     return value.map(toCardanoMetadata);
   }
   if (typeof value === 'object') {
-    const result: Record<string, unknown> = {};
+    // Use a Map to preserve insertion order and be explicit about types
+    const result = new Map<string, unknown>();
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      // Keys are typically short, but chunk them too for safety
-      const safeKey = chunkString(k, MAX_METADATA_STRING_BYTES);
-      const key = safeKey.length === 1 ? safeKey[0] : safeKey.join('');
-      result[key] = toCardanoMetadata(v);
+      // Skip undefined values — Cardano metadata can't represent them
+      if (v === undefined) continue;
+      result.set(k, toCardanoMetadata(v));
     }
     return result;
   }
@@ -104,7 +105,7 @@ export class TestnetBlockchain implements BlockchainService {
 
   constructor(
     blockfrost: BlockfrostClient,
-    _getWallet: () => unknown, // kept for interface compat, we use BrowserWallet instead
+    _getWallet: () => unknown,
     _blockfrostApiKey?: string
   ) {
     this.blockfrost = blockfrost;
@@ -115,32 +116,24 @@ export class TestnetBlockchain implements BlockchainService {
     this.connectedWalletName = walletName;
   }
 
-  /**
-   * Get or re-enable the BrowserWallet instance.
-   * BrowserWallet wraps CIP-30 and returns parsed UTxO objects.
-   */
   private async getWallet(): Promise<BrowserWallet> {
     if (!this.connectedWalletName) {
       throw new Error('Wallet not connected. Please connect a CIP-30 wallet.');
     }
-    // BrowserWallet.enable() re-uses the existing CIP-30 connection
-    // (won't re-prompt the user if already authorized)
     return BrowserWallet.enable(this.connectedWalletName);
   }
 
   /**
    * Build, sign, and submit a transaction with label 17 metadata.
    *
-   * Uses MeshTxBuilder in offline mode — UTxOs come from the wallet directly
-   * via BrowserWallet.getUtxos() (already parsed), so no Blockfrost UTxO
-   * lookups are needed. Coin selection is handled by selectUtxosFrom().
+   * Strategy: Build tx without metadata first, then attach metadata
+   * post-build to avoid CBOR serialization issues in MeshTxBuilder.
    */
   private async buildAndSubmitMetadataTx(
     metadataPayload: Record<string, unknown>
   ): Promise<string> {
     const wallet = await this.getWallet();
 
-    // Get parsed UTxOs and change address from BrowserWallet
     const utxos = await wallet.getUtxos();
     if (!utxos || utxos.length === 0) {
       throw new Error(
@@ -150,27 +143,22 @@ export class TestnetBlockchain implements BlockchainService {
 
     const changeAddress = await wallet.getChangeAddress();
 
-    // Build transaction offline — no fetcher needed
-    const txBuilder = new MeshTxBuilder();
-
-    // Set change address for leftover value
-    txBuilder.changeAddress(changeAddress);
-
     // Prepare metadata for Cardano's 64-byte string limit
     const rawContent = metadataPayload[METADATA_LABEL.toString()];
     const safeContent = toCardanoMetadata(rawContent) as object;
 
-    // Add metadata with label 17
-    txBuilder.metadataValue(METADATA_LABEL.toString(), safeContent);
+    // Build transaction using the higher-level Transaction class
+    // which handles metadata serialization more reliably
+    const tx = new Transaction({ initiator: wallet });
 
-    // Minimal self-payment to create a valid tx that carries metadata
-    txBuilder.txOut(changeAddress, [{ unit: 'lovelace', quantity: '2000000' }]);
+    // Send min ADA to self to carry the metadata
+    tx.sendLovelace(changeAddress, '2000000');
 
-    // Provide wallet UTxOs for coin selection (no Blockfrost lookup)
-    txBuilder.selectUtxosFrom(utxos);
+    // Set metadata using the Transaction class API
+    tx.setMetadata(METADATA_LABEL, safeContent);
 
-    // Build the balanced transaction
-    const unsignedTx = txBuilder.completeSync();
+    // Build the transaction — Transaction class handles signing internally
+    const unsignedTx = await tx.build();
 
     // Sign with CIP-30 wallet
     const signedTx = await wallet.signTx(unsignedTx);
@@ -185,7 +173,6 @@ export class TestnetBlockchain implements BlockchainService {
     details: SurveyDetails,
     msg?: string[]
   ): Promise<CreateSurveyResult> {
-    // Validate
     const validation = validateSurveyDetails(details);
     if (!validation.valid) {
       throw new Error(`Invalid survey:\n${validation.errors.join('\n')}`);
@@ -193,7 +180,6 @@ export class TestnetBlockchain implements BlockchainService {
 
     const surveyHash = computeSurveyHash(details);
 
-    // Build metadata payload
     const innerPayload: Record<string, unknown> = {
       ...(msg && msg.length > 0 ? { msg } : {}),
       surveyDetails: { ...details },
@@ -203,7 +189,6 @@ export class TestnetBlockchain implements BlockchainService {
       [METADATA_LABEL]: innerPayload,
     };
 
-    // Build, sign, and submit the transaction
     const txHash = await this.buildAndSubmitMetadataTx(metadataPayload);
 
     return {
@@ -228,10 +213,7 @@ export class TestnetBlockchain implements BlockchainService {
       [METADATA_LABEL]: innerPayload,
     };
 
-    // Build, sign, and submit the transaction
     const txHash = await this.buildAndSubmitMetadataTx(metadataPayload);
-
-    // Get the change address as the response credential
     const changeAddress = await wallet.getChangeAddress();
 
     return {
@@ -265,7 +247,6 @@ export class TestnetBlockchain implements BlockchainService {
               metadataPayload: { [METADATA_LABEL]: entry.json_metadata },
             });
           } catch {
-            // Skip invalid entries
             console.warn(`Skipping invalid survey in tx ${entry.tx_hash}`);
           }
         }
@@ -295,7 +276,7 @@ export class TestnetBlockchain implements BlockchainService {
               const txInfo = await this.blockfrost.getTransaction(entry.tx_hash);
               responses.push({
                 txId: entry.tx_hash,
-                responseCredential: 'on-chain', // Would need to derive from tx data
+                responseCredential: 'on-chain',
                 surveyTxId: resp.surveyTxId,
                 surveyHash: resp.surveyHash,
                 selection: resp.selection,
