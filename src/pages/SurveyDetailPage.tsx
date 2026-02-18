@@ -55,7 +55,7 @@ export function SurveyDetailPage() {
         <p className="text-sm text-slate-500 mb-6">The survey you're looking for doesn't exist</p>
         <button
           onClick={() => navigate('/surveys')}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-600/20"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-violet-600 hover:from-teal-500 hover:to-violet-500 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-teal-600/20"
         >
           <ArrowLeft className="w-4 h-4" />
           Back to surveys
@@ -95,7 +95,7 @@ export function SurveyDetailPage() {
         <div className="flex-1 min-w-0">
           {/* Method badge + eligibility */}
           <div className="flex items-center gap-2 mb-3">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/20">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold text-teal-400 bg-teal-500/10 border border-teal-500/20">
               <MethodIcon className="w-3 h-3" />
               {methodLabel}
             </div>
@@ -117,7 +117,7 @@ export function SurveyDetailPage() {
             </span>
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-2">
+          <h2 className="text-2xl font-bold text-white mb-2 font-heading">
             {survey.details.title}
           </h2>
           <p className="text-sm text-slate-400 mb-4 leading-relaxed">
@@ -126,22 +126,22 @@ export function SurveyDetailPage() {
 
           {/* Survey IDs */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <div className="flex items-center gap-1.5 bg-slate-800/50 border border-slate-700/50 px-3 py-1.5 rounded-lg">
+            <div className="flex items-center gap-1.5 bg-slate-800/50 border border-slate-700/30 px-3 py-1.5 rounded-lg">
               <span className="text-slate-500 font-medium">TxId</span>
-              <code className="text-slate-300 font-mono">
+              <code className="text-slate-300 font-code">
                 {survey.surveyTxId.slice(0, 20)}...
               </code>
             </div>
             <button
               onClick={copyHash}
-              className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/15 transition-all duration-200"
+              className="flex items-center gap-1.5 bg-teal-500/10 border border-teal-500/20 px-3 py-1.5 rounded-lg text-teal-400 hover:text-teal-300 hover:bg-teal-500/15 transition-all duration-200"
             >
               <span className="font-medium">Hash</span>
-              <code className="font-mono">
+              <code className="font-code">
                 {survey.surveyHash.slice(0, 20)}...
               </code>
               {copied ? (
-                <Check className="w-3 h-3 text-emerald-300" />
+                <Check className="w-3 h-3 text-teal-300" />
               ) : (
                 <Copy className="w-3 h-3" />
               )}
@@ -151,14 +151,14 @@ export function SurveyDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-800/30 p-1 rounded-xl border border-slate-700/50">
+      <div className="flex gap-1 bg-slate-800/20 p-1 rounded-xl border border-slate-700/30">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
               activeTab === id
-                ? 'bg-slate-700 text-white shadow-sm'
+                ? 'bg-teal-500/15 text-teal-300 shadow-sm border border-teal-500/20'
                 : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
             }`}
           >
@@ -180,21 +180,21 @@ export function SurveyDetailPage() {
         {activeTab === 'results' && <TallyDashboard survey={survey} />}
 
         {activeTab === 'metadata' && (
-          <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-slate-700/50 flex items-center gap-2">
+          <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-700/30 flex items-center gap-2">
               <FileJson className="w-4 h-4 text-slate-500" />
-              <h4 className="text-sm font-semibold text-slate-300">
+              <h4 className="text-sm font-semibold text-slate-300 font-heading">
                 Full Label 17 Metadata Payload
               </h4>
             </div>
-            <pre className="p-5 text-xs font-mono text-slate-300 overflow-x-auto max-h-[600px] overflow-y-auto leading-relaxed">
+            <pre className="p-5 text-xs font-code text-slate-300 overflow-x-auto max-h-[600px] overflow-y-auto leading-relaxed">
               {JSON.stringify(survey.metadataPayload, null, 2)}
             </pre>
-            <div className="px-5 py-3 border-t border-slate-700/30 bg-emerald-500/5">
-              <p className="text-xs text-emerald-400 flex items-center gap-2">
+            <div className="px-5 py-3 border-t border-slate-700/30 bg-teal-500/5">
+              <p className="text-xs text-teal-400 flex items-center gap-2">
                 <Hash className="w-3 h-3" />
                 <span className="font-semibold">surveyHash:</span>{' '}
-                <code className="font-mono">{survey.surveyHash}</code>
+                <code className="font-code">{survey.surveyHash}</code>
               </p>
             </div>
           </div>

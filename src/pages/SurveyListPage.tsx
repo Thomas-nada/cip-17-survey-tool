@@ -25,11 +25,11 @@ export function SurveyListPage() {
       {/* Page header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-blue-500/10 rounded-xl border border-blue-500/20">
-            <Vote className="w-5 h-5 text-blue-400" />
+          <div className="p-2.5 bg-teal-500/10 rounded-xl border border-teal-500/20">
+            <Vote className="w-5 h-5 text-teal-400" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white">Surveys</h2>
+            <h2 className="text-2xl font-bold text-white font-heading">Surveys</h2>
             <p className="text-sm text-slate-500">
               {state.surveys.length} survey{state.surveys.length !== 1 ? 's' : ''} created
             </p>
@@ -37,7 +37,7 @@ export function SurveyListPage() {
         </div>
         <button
           onClick={() => navigate('/create')}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-lg shadow-blue-600/20 hover:shadow-blue-500/25 hover:-translate-y-0.5"
+          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-violet-600 hover:from-teal-500 hover:to-violet-500 text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-lg shadow-teal-600/20 hover:shadow-teal-500/25 hover:-translate-y-0.5"
         >
           <PlusCircle className="w-4 h-4" />
           New Survey
@@ -53,7 +53,7 @@ export function SurveyListPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by title, question, or TxId..."
-            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none transition-all"
+            className="w-full bg-slate-800/50 border border-slate-700/30 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500/50 outline-none transition-all"
           />
         </div>
       )}
@@ -75,7 +75,7 @@ export function SurveyListPage() {
           {!search && (
             <button
               onClick={() => navigate('/create')}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-blue-600/20"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-violet-600 hover:from-teal-500 hover:to-violet-500 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-teal-600/20"
             >
               <PlusCircle className="w-4 h-4" />
               Create Survey

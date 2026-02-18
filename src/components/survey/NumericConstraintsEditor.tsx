@@ -23,7 +23,7 @@ export function NumericConstraintsEditor({ value, onChange }: Props) {
             onChange={(e) =>
               onChange({ ...value, minValue: parseInt(e.target.value) || 0 })
             }
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
           />
         </div>
 
@@ -37,7 +37,7 @@ export function NumericConstraintsEditor({ value, onChange }: Props) {
             onChange={(e) =>
               onChange({ ...value, maxValue: parseInt(e.target.value) || 100 })
             }
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
           />
         </div>
 
@@ -57,7 +57,7 @@ export function NumericConstraintsEditor({ value, onChange }: Props) {
               });
             }}
             placeholder="Any"
-            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
           />
         </div>
       </div>
@@ -66,13 +66,13 @@ export function NumericConstraintsEditor({ value, onChange }: Props) {
         <div className="bg-slate-800/50 rounded-lg p-3">
           <p className="text-xs text-slate-400">
             Respondents will choose a value between{' '}
-            <span className="text-blue-400 font-mono">{value.minValue}</span> and{' '}
-            <span className="text-blue-400 font-mono">{value.maxValue}</span>
+            <span className="text-teal-400 font-code">{value.minValue}</span> and{' '}
+            <span className="text-teal-400 font-code">{value.maxValue}</span>
             {value.step ? (
               <>
                 {' '}
                 in increments of{' '}
-                <span className="text-blue-400 font-mono">{value.step}</span>
+                <span className="text-teal-400 font-code">{value.step}</span>
               </>
             ) : null}
           </p>

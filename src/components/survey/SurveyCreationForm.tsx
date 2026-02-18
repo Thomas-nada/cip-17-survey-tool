@@ -152,7 +152,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Dijkstra hard-fork CIP shortlist"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
             />
           </div>
 
@@ -166,7 +166,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               placeholder="Provide context for this survey..."
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none resize-none"
             />
           </div>
 
@@ -180,7 +180,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               placeholder="e.g. Which CIPs should be shortlisted for Dijkstra?"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
             />
           </div>
 
@@ -243,7 +243,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
             disabled={!validation.valid || submitting}
             className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all ${
               validation.valid && !submitting
-                ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20'
+                ? 'bg-gradient-to-r from-teal-600 to-violet-600 hover:from-teal-500 hover:to-violet-500 text-white shadow-lg shadow-teal-600/20'
                 : 'bg-slate-700 text-slate-500 cursor-not-allowed'
             }`}
           >
@@ -256,7 +256,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
 
         {/* Right column - Live preview */}
         <div className="space-y-4">
-          <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">
+          <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider font-heading">
             Live Preview
           </h3>
           <div className="sticky top-24">

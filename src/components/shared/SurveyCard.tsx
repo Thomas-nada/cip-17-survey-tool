@@ -18,9 +18,9 @@ const METHOD_CONFIG = {
   [METHOD_SINGLE_CHOICE]: {
     icon: ListChecks,
     label: 'Single Choice',
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/20',
+    color: 'text-teal-400',
+    bg: 'bg-teal-500/10',
+    border: 'border-teal-500/20',
   },
   [METHOD_MULTI_SELECT]: {
     icon: CheckSquare,
@@ -58,7 +58,7 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
   return (
     <button
       onClick={onClick}
-      className="w-full text-left bg-slate-800/30 border border-slate-700/50 hover:border-slate-600 rounded-xl p-5 transition-all duration-200 group hover:bg-slate-800/50 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10"
+      className="glow-card w-full text-left bg-slate-800/20 rounded-xl p-5 transition-all duration-200 group hover:bg-slate-800/40 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10"
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
@@ -83,7 +83,7 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
           </div>
 
           {/* Title & question */}
-          <h3 className="text-white font-semibold text-base mb-1.5 group-hover:text-blue-100 transition-colors truncate">
+          <h3 className="text-white font-semibold text-base mb-1.5 group-hover:text-teal-100 transition-colors truncate font-heading">
             {details.title}
           </h3>
           <p className="text-sm text-slate-400 line-clamp-2 mb-4 leading-relaxed">
@@ -92,7 +92,7 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
 
           {/* Meta row */}
           <div className="flex items-center gap-4 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5 font-mono">
+            <span className="flex items-center gap-1.5 font-code">
               <Hash className="w-3 h-3" />
               {survey.surveyTxId.slice(0, 12)}...
             </span>
@@ -113,11 +113,11 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
           {/* Response count indicator */}
           {responseCount > 0 && (
             <div className="hidden sm:flex flex-col items-center justify-center bg-slate-700/30 rounded-lg px-3 py-2 min-w-[60px]">
-              <span className="text-lg font-bold text-white">{responseCount}</span>
+              <span className="text-lg font-bold text-white font-heading">{responseCount}</span>
               <span className="text-[10px] text-slate-500">votes</span>
             </div>
           )}
-          <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-blue-400 transition-all duration-200 group-hover:translate-x-0.5" />
+          <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-teal-400 transition-all duration-200 group-hover:translate-x-0.5" />
         </div>
       </div>
     </button>

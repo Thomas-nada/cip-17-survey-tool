@@ -30,7 +30,7 @@ export function MethodTypeSelector({ value, onChange }: Props) {
               onClick={() => onChange(method.value)}
               className={`flex flex-col items-start gap-2 p-4 rounded-xl border-2 transition-all text-left ${
                 selected
-                  ? 'border-blue-500 bg-blue-500/10 shadow-lg shadow-blue-500/10'
+                  ? 'border-teal-500 bg-teal-500/10 shadow-lg shadow-teal-500/10'
                   : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
               }`}
             >
@@ -38,13 +38,13 @@ export function MethodTypeSelector({ value, onChange }: Props) {
                 {Icon && (
                   <Icon
                     className={`w-5 h-5 ${
-                      selected ? 'text-blue-400' : 'text-slate-500'
+                      selected ? 'text-teal-400' : 'text-slate-500'
                     }`}
                   />
                 )}
                 <span
                   className={`font-semibold text-sm ${
-                    selected ? 'text-blue-300' : 'text-slate-300'
+                    selected ? 'text-teal-300' : 'text-slate-300'
                   }`}
                 >
                   {method.label}

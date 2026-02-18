@@ -68,7 +68,7 @@ export function MetadataPreview({ details, msg, isValid }: Props) {
 
   if (!isValid || !payload) {
     return (
-      <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6 text-center">
+      <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-6 text-center">
         <FileJson className="w-8 h-8 text-slate-600 mx-auto mb-2" />
         <p className="text-sm text-slate-500">
           Fill in the required fields to see the metadata preview
@@ -78,11 +78,11 @@ export function MetadataPreview({ details, msg, isValid }: Props) {
   }
 
   return (
-    <div className="bg-slate-800/50 border border-slate-700 rounded-xl overflow-hidden">
+    <div className="bg-slate-800/50 border border-slate-700/30 rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/30">
         <div className="flex items-center gap-2">
-          <FileJson className="w-4 h-4 text-blue-400" />
+          <FileJson className="w-4 h-4 text-teal-400" />
           <span className="text-sm font-medium text-slate-300">
             Label 17 Metadata Payload
           </span>
@@ -92,7 +92,7 @@ export function MetadataPreview({ details, msg, isValid }: Props) {
           className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
         >
           {copied ? (
-            <Check className="w-3.5 h-3.5 text-green-400" />
+            <Check className="w-3.5 h-3.5 text-teal-400" />
           ) : (
             <Copy className="w-3.5 h-3.5" />
           )}
@@ -101,27 +101,27 @@ export function MetadataPreview({ details, msg, isValid }: Props) {
       </div>
 
       {/* Survey Hash */}
-      <div className="px-4 py-3 border-b border-slate-700/50 bg-emerald-500/5">
+      <div className="px-4 py-3 border-b border-slate-700/30 bg-teal-500/5">
         <div className="flex items-center gap-2 mb-1">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-xs font-medium text-emerald-400">
+          <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+          <span className="text-xs font-medium text-teal-400">
             Survey Hash (blake2b-256)
           </span>
         </div>
-        <code className="text-xs font-mono text-emerald-300 break-all">
+        <code className="text-xs font-code text-teal-300 break-all">
           {surveyHash}
         </code>
       </div>
 
       {/* JSON Preview */}
       <div className="relative">
-        <pre className="p-4 text-xs font-mono text-slate-300 overflow-x-auto max-h-80 overflow-y-auto">
+        <pre className="p-4 text-xs font-code text-slate-300 overflow-x-auto max-h-80 overflow-y-auto">
           {JSON.stringify(payload, null, 2)}
         </pre>
       </div>
 
       {/* CBOR Toggle */}
-      <div className="border-t border-slate-700/50">
+      <div className="border-t border-slate-700/30">
         <button
           onClick={() => setShowCbor(!showCbor)}
           className="w-full px-4 py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors text-left"
@@ -130,7 +130,7 @@ export function MetadataPreview({ details, msg, isValid }: Props) {
         </button>
         {showCbor && cborHex && (
           <div className="px-4 pb-3">
-            <code className="text-xs font-mono text-orange-300/70 break-all block max-h-32 overflow-y-auto">
+            <code className="text-xs font-code text-orange-300/70 break-all block max-h-32 overflow-y-auto">
               {cborHex}
             </code>
           </div>

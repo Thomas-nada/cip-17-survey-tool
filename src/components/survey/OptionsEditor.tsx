@@ -56,7 +56,7 @@ export function OptionsEditor({
               value={opt}
               onChange={(e) => updateOption(index, e.target.value)}
               placeholder={`Option ${index + 1}`}
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
             />
             <button
               type="button"
@@ -77,7 +77,7 @@ export function OptionsEditor({
       <button
         type="button"
         onClick={addOption}
-        className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+        className="flex items-center gap-1.5 text-sm text-teal-400 hover:text-teal-300 transition-colors"
       >
         <Plus className="w-4 h-4" />
         Add Option
@@ -96,7 +96,7 @@ export function OptionsEditor({
             onChange={(e) =>
               onMaxSelectionsChange?.(parseInt(e.target.value) || 1)
             }
-            className="w-32 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            className="w-32 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
           />
           <p className="text-xs text-slate-500 mt-1">
             Voters can select up to {maxSelections ?? 1} of{' '}

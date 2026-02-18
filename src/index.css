@@ -1,13 +1,76 @@
 @import "tailwindcss";
 
-/* Reset some defaults for the app */
+/* ─── Brand Fonts ──────────────────────────────────────────── */
+.font-heading {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+.font-code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ─── Body & Background ───────────────────────────────────── */
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  background: #07090f;
+  /* Subtle teal+violet corner washes */
+  background-image:
+    radial-gradient(ellipse 80% 60% at 10% 0%, rgba(20, 184, 166, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 100%, rgba(139, 92, 246, 0.05) 0%, transparent 60%);
+  background-attachment: fixed;
 }
 
-/* Custom scrollbar for dark theme */
+/* ─── Accent Stripe (3 px at viewport top) ─────────────────── */
+.accent-stripe::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #14b8a6, #8b5cf6);
+  z-index: 100;
+}
+
+/* ─── Glow Cards ───────────────────────────────────────────── */
+.glow-card {
+  position: relative;
+  border: 1px solid rgba(20, 184, 166, 0.15);
+  transition: all 0.3s ease;
+}
+
+.glow-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(20, 184, 166, 0.15), rgba(139, 92, 246, 0.1));
+  opacity: 0;
+  z-index: -1;
+  transition: opacity 0.3s ease;
+  filter: blur(12px);
+}
+
+.glow-card:hover {
+  border-color: rgba(20, 184, 166, 0.35);
+}
+
+.glow-card:hover::after {
+  opacity: 1;
+}
+
+/* ─── Brand Gradient Text ──────────────────────────────────── */
+.brand-gradient-text {
+  background: linear-gradient(135deg, #14b8a6, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Custom scrollbar for dark theme ──────────────────────── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -26,7 +89,7 @@ body {
   background: #475569;
 }
 
-/* Utility classes for line clamping */
+/* ─── Utility: line clamping ───────────────────────────────── */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -34,7 +97,7 @@ body {
   overflow: hidden;
 }
 
-/* Range input styling */
+/* ─── Range input styling (teal) ───────────────────────────── */
 input[type="range"] {
   -webkit-appearance: none;
   height: 6px;
@@ -52,124 +115,77 @@ input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 20px;
   height: 20px;
-  background: #3b82f6;
+  background: #14b8a6;
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid #1e293b;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border: 2px solid #07090f;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
   transition: all 0.15s;
 }
 
 input[type="range"]::-webkit-slider-thumb:hover {
-  background: #60a5fa;
-  box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.2);
+  background: #2dd4bf;
+  box-shadow: 0 0 0 5px rgba(20, 184, 166, 0.2);
   transform: scale(1.1);
 }
 
-/* ─── Animations ─────────────────────────────────────────────── */
+/* ─── Animations ───────────────────────────────────────────── */
 
-/* Fade in from below */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
+.animate-fadeIn { animation: fadeIn 0.3s ease-out; }
 
-.animate-fadeIn {
-  animation: fadeIn 0.3s ease-out;
-}
-
-/* Slide down for settings panel */
 @keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
+.animate-slideDown { animation: slideDown 0.2s ease-out; }
 
-.animate-slideDown {
-  animation: slideDown 0.2s ease-out;
-}
-
-/* Scale-in animation */
 @keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }
+.animate-scaleIn { animation: scaleIn 0.2s ease-out; }
 
-.animate-scaleIn {
-  animation: scaleIn 0.2s ease-out;
-}
-
-/* Subtle pulse for live indicators */
 @keyframes gentlePulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
+.animate-gentle-pulse { animation: gentlePulse 2s ease-in-out infinite; }
 
-.animate-gentle-pulse {
-  animation: gentlePulse 2s ease-in-out infinite;
-}
-
-/* Success checkmark */
 @keyframes checkmark {
-  from {
-    stroke-dashoffset: 100;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
 }
 
-/* Smooth page transitions */
 @keyframes pageEnter {
-  from {
-    opacity: 0;
-    transform: translateX(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
 }
+.animate-pageEnter { animation: pageEnter 0.25s ease-out; }
 
-.animate-pageEnter {
-  animation: pageEnter 0.25s ease-out;
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
 }
+.animate-shimmer { background-size: 200% auto; animation: shimmer 3s linear infinite; }
 
-/* ─── Global selection color ────────────────────────────────── */
+/* ─── Global selection color (teal) ────────────────────────── */
 ::selection {
-  background: rgba(59, 130, 246, 0.3);
+  background: rgba(20, 184, 166, 0.3);
   color: white;
 }
 
-/* ─── Focus visible styles ──────────────────────────────────── */
+/* ─── Focus visible styles (teal) ──────────────────────────── */
 :focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline: 2px solid rgba(20, 184, 166, 0.5);
   outline-offset: 2px;
   border-radius: 4px;
 }
 
-/* ─── Smooth transitions for interactive elements ────────── */
+/* ─── Smooth transitions for interactive elements ──────────── */
 button, a, input, select, textarea {
   transition-property: color, background-color, border-color, box-shadow, opacity, transform;
   transition-duration: 150ms;

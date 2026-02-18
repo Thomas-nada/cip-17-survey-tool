@@ -123,14 +123,14 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
       {/* Question card */}
-      <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-        <h3 className="text-lg font-bold text-white mb-2">
+      <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-6">
+        <h3 className="text-lg font-bold text-white mb-2 font-heading">
           {details.question}
         </h3>
         <p className="text-sm text-slate-400 leading-relaxed">{details.description}</p>
         {method === METHOD_MULTI_SELECT && (
           <div className="mt-3 flex items-center gap-2">
-            <span className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20">
+            <span className="text-xs font-semibold text-teal-400 bg-teal-500/10 px-2.5 py-1 rounded-lg border border-teal-500/20">
               Select up to {details.maxSelections} options
             </span>
             {selectedIndices.length > 0 && (
@@ -142,7 +142,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
         )}
         {method === METHOD_SINGLE_CHOICE && (
           <div className="mt-3">
-            <span className="text-xs font-semibold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-lg border border-blue-500/20">
+            <span className="text-xs font-semibold text-teal-400 bg-teal-500/10 px-2.5 py-1 rounded-lg border border-teal-500/20">
               Choose one option
             </span>
           </div>
@@ -162,7 +162,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
                 onClick={() => toggleOption(index)}
                 className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-200 text-left group ${
                   selected
-                    ? 'border-blue-500 bg-blue-500/10 shadow-sm shadow-blue-500/10'
+                    ? 'border-teal-500 bg-teal-500/10 shadow-sm shadow-teal-500/10'
                     : 'border-slate-700/50 bg-slate-800/20 hover:border-slate-600 hover:bg-slate-800/40'
                 }`}
               >
@@ -172,7 +172,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
                     isRadio ? 'rounded-full' : 'rounded-md'
                   } ${
                     selected
-                      ? 'bg-blue-500 border-2 border-blue-500'
+                      ? 'bg-teal-500 border-2 border-teal-500'
                       : 'border-2 border-slate-600 group-hover:border-slate-500'
                   }`}
                 >
@@ -192,8 +192,8 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
                   </span>
                 </div>
 
-                <span className={`text-xs font-mono transition-colors ${
-                  selected ? 'text-blue-400' : 'text-slate-600'
+                <span className={`text-xs font-code transition-colors ${
+                  selected ? 'text-teal-400' : 'text-slate-600'
                 }`}>
                   [{index}]
                 </span>
@@ -205,9 +205,9 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
 
       {/* Numeric input */}
       {isNumeric && details.numericConstraints && (
-        <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6 space-y-5">
+        <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-6 space-y-5">
           <div className="text-center">
-            <div className="text-4xl font-bold font-mono text-white mb-1">
+            <div className="text-4xl font-bold font-code text-white mb-1">
               {numericValue.toLocaleString()}
             </div>
             <p className="text-xs text-slate-500">
@@ -223,9 +223,9 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
               step={details.numericConstraints.step ?? 1}
               value={numericValue}
               onChange={(e) => setNumericValue(parseInt(e.target.value))}
-              className="w-full accent-blue-500"
+              className="w-full accent-teal-500"
             />
-            <div className="flex justify-between text-xs text-slate-500 mt-2 font-mono">
+            <div className="flex justify-between text-xs text-slate-500 mt-2 font-code">
               <span>{details.numericConstraints.minValue}</span>
               <span>{details.numericConstraints.maxValue}</span>
             </div>
@@ -240,7 +240,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
               step={details.numericConstraints.step ?? 1}
               value={numericValue}
               onChange={(e) => setNumericValue(parseInt(e.target.value) || 0)}
-              className="w-28 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white text-center font-mono focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 outline-none"
+              className="w-28 bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white text-center font-code focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500/50 outline-none"
             />
           </div>
         </div>
@@ -258,7 +258,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
         </button>
         {showPayload && (
           <div className="px-4 pb-3 animate-slideDown">
-            <pre className="text-xs font-mono text-slate-400 overflow-x-auto bg-slate-900/30 rounded-lg p-3">
+            <pre className="text-xs font-code text-slate-400 overflow-x-auto bg-slate-900/30 rounded-lg p-3">
               {JSON.stringify(
                 {
                   17: {
@@ -288,7 +288,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
         disabled={!validation.valid || submitting}
         className={`w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
           validation.valid && !submitting
-            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 hover:shadow-emerald-500/25 hover:-translate-y-0.5 active:translate-y-0'
+            ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-lg shadow-teal-600/20 hover:shadow-teal-500/25 hover:-translate-y-0.5 active:translate-y-0'
             : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
         }`}
       >

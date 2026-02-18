@@ -20,7 +20,7 @@ import {
 import type { StoredSurvey } from '../../types/survey.ts';
 
 const BAR_COLORS = [
-  '#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b',
+  '#14b8a6', '#8b5cf6', '#ec4899', '#f59e0b',
   '#10b981', '#06b6d4', '#f43f5e', '#84cc16',
 ];
 
@@ -73,25 +73,25 @@ export function TallyDashboard({ survey }: Props) {
     <div className="space-y-6 animate-fadeIn">
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
+        <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="w-4 h-4 text-blue-400" />
+            <TrendingUp className="w-4 h-4 text-teal-400" />
             <span className="text-xs text-slate-400 font-medium">Total Responses</span>
           </div>
-          <p className="text-2xl font-bold text-white">{tally.totalResponses.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-white font-heading">{tally.totalResponses.toLocaleString()}</p>
         </div>
         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <Users className="w-4 h-4 text-emerald-400" />
             <span className="text-xs text-slate-400 font-medium">Unique Voters</span>
           </div>
-          <p className="text-2xl font-bold text-white">
+          <p className="text-2xl font-bold text-white font-heading">
             {tally.uniqueCredentials.toLocaleString()}
           </p>
         </div>
-        <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-4">
+        <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
-            <Hash className="w-4 h-4 text-purple-400" />
+            <Hash className="w-4 h-4 text-violet-400" />
             <span className="text-xs text-slate-400 font-medium">Weighting</span>
           </div>
           <p className="text-sm font-bold text-white mt-0.5">
@@ -115,7 +115,7 @@ export function TallyDashboard({ survey }: Props) {
               <Award className="w-4 h-4 text-amber-400" />
               <span className="text-xs text-slate-400 font-medium">Median</span>
             </div>
-            <p className="text-2xl font-bold font-mono text-white">
+            <p className="text-2xl font-bold font-code text-white">
               {tally.numericTally.median}
             </p>
           </div>
@@ -124,8 +124,8 @@ export function TallyDashboard({ survey }: Props) {
 
       {/* Option-based chart */}
       {isOptionBased && tally.optionTallies && (
-        <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-          <h4 className="text-sm font-semibold text-slate-300 mb-5">
+        <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-6">
+          <h4 className="text-sm font-semibold text-slate-300 mb-5 font-heading">
             Vote Distribution
           </h4>
           <ResponsiveContainer width="100%" height={280}>
@@ -149,8 +149,8 @@ export function TallyDashboard({ survey }: Props) {
               />
               <Tooltip
                 contentStyle={{
-                  background: '#0f172a',
-                  border: '1px solid #1e293b',
+                  background: '#0c0f1a',
+                  border: '1px solid rgba(20, 184, 166, 0.2)',
                   borderRadius: '12px',
                   color: '#f1f5f9',
                   fontSize: '12px',
@@ -191,7 +191,7 @@ export function TallyDashboard({ survey }: Props) {
                     {t.label}
                     {isLeading && <Award className="w-3 h-3 text-amber-400 inline ml-1.5" />}
                   </span>
-                  <span className="text-sm font-mono text-slate-400 tabular-nums">
+                  <span className="text-sm font-code text-slate-400 tabular-nums">
                     {t.count.toLocaleString()}
                   </span>
                   <div className="w-28 h-2 bg-slate-700/50 rounded-full overflow-hidden">
@@ -203,7 +203,7 @@ export function TallyDashboard({ survey }: Props) {
                       }}
                     />
                   </div>
-                  <span className="text-xs text-slate-500 w-14 text-right font-mono tabular-nums">
+                  <span className="text-xs text-slate-500 w-14 text-right font-code tabular-nums">
                     {pct.toFixed(1)}%
                   </span>
                 </div>
@@ -215,15 +215,15 @@ export function TallyDashboard({ survey }: Props) {
 
       {/* Numeric results */}
       {isNumeric && tally.numericTally && (
-        <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6">
-          <h4 className="text-sm font-semibold text-slate-300 mb-5">
+        <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-6">
+          <h4 className="text-sm font-semibold text-slate-300 mb-5 font-heading">
             Value Distribution
           </h4>
 
           {/* Stats */}
           <div className="grid grid-cols-4 gap-3 mb-6">
             {[
-              { label: 'Mean', value: tally.numericTally.mean.toFixed(1), color: 'text-blue-400' },
+              { label: 'Mean', value: tally.numericTally.mean.toFixed(1), color: 'text-teal-400' },
               { label: 'Median', value: tally.numericTally.median.toFixed(1), color: 'text-emerald-400' },
               { label: 'Min', value: tally.numericTally.min, color: 'text-slate-400' },
               { label: 'Max', value: tally.numericTally.max, color: 'text-slate-400' },
@@ -233,7 +233,7 @@ export function TallyDashboard({ survey }: Props) {
                 className="bg-slate-900/30 border border-slate-700/30 rounded-xl p-4 text-center"
               >
                 <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mb-1">{label}</p>
-                <p className={`text-xl font-bold font-mono ${color}`}>
+                <p className={`text-xl font-bold font-code ${color}`}>
                   {value}
                 </p>
               </div>
@@ -257,8 +257,8 @@ export function TallyDashboard({ survey }: Props) {
                 />
                 <Tooltip
                   contentStyle={{
-                    background: '#0f172a',
-                    border: '1px solid #1e293b',
+                    background: '#0c0f1a',
+                    border: '1px solid rgba(20, 184, 166, 0.2)',
                     borderRadius: '12px',
                     color: '#f1f5f9',
                     fontSize: '12px',
@@ -272,12 +272,12 @@ export function TallyDashboard({ survey }: Props) {
       )}
 
       {/* Response list */}
-      <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-700/50 flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-slate-300">
+      <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-700/30 flex items-center justify-between">
+          <h4 className="text-sm font-semibold text-slate-300 font-heading">
             Individual Responses
           </h4>
-          <span className="text-xs text-slate-500 font-mono">
+          <span className="text-xs text-slate-500 font-code">
             {responses.length.toLocaleString()} total
           </span>
         </div>
@@ -302,7 +302,7 @@ export function TallyDashboard({ survey }: Props) {
                   key={resp.txId}
                   className="border-b border-slate-800/30 hover:bg-slate-800/20 transition-colors"
                 >
-                  <td className="px-5 py-3 font-mono text-xs text-slate-400">
+                  <td className="px-5 py-3 font-code text-xs text-slate-400">
                     {resp.responseCredential.slice(0, 16)}...
                   </td>
                   <td className="px-5 py-3 text-slate-300 text-xs">
@@ -317,10 +317,10 @@ export function TallyDashboard({ survey }: Props) {
                       </span>
                     )}
                     {resp.numericValue !== undefined && (
-                      <span className="font-mono font-semibold">{resp.numericValue.toLocaleString()}</span>
+                      <span className="font-code font-semibold">{resp.numericValue.toLocaleString()}</span>
                     )}
                   </td>
-                  <td className="px-5 py-3 font-mono text-xs text-slate-500">
+                  <td className="px-5 py-3 font-code text-xs text-slate-500">
                     {resp.slot.toLocaleString()}
                   </td>
                 </tr>
@@ -334,7 +334,7 @@ export function TallyDashboard({ survey }: Props) {
           <div className="px-5 py-3 border-t border-slate-700/30">
             <button
               onClick={() => setShowAllResponses(!showAllResponses)}
-              className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors"
+              className="flex items-center gap-1.5 text-xs text-teal-400 hover:text-teal-300 font-medium transition-colors"
             >
               {showAllResponses ? (
                 <>

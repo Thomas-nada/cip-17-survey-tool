@@ -73,7 +73,7 @@ export function OptionalFieldsEditor({
                   onClick={() => toggleEligibility(role)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     eligibility?.includes(role)
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-teal-600 text-white'
                       : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
                   }`}
                 >
@@ -98,7 +98,7 @@ export function OptionalFieldsEditor({
                   }
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     voteWeighting === w
-                      ? 'bg-blue-600 text-white'
+                      ? 'bg-teal-600 text-white'
                       : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
                   }`}
                 >
@@ -134,7 +134,7 @@ export function OptionalFieldsEditor({
                       actionIndex: 0,
                     })
                   }
-                  className="text-xs text-blue-400 hover:text-blue-300"
+                  className="text-xs text-teal-400 hover:text-teal-300"
                 >
                   Add
                 </button>
@@ -152,7 +152,7 @@ export function OptionalFieldsEditor({
                     })
                   }
                   placeholder="Transaction ID (64 hex chars)"
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-mono"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
                 />
                 <input
                   type="number"
@@ -165,7 +165,7 @@ export function OptionalFieldsEditor({
                     })
                   }
                   placeholder="Action Index"
-                  className="w-32 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                  className="w-32 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
                 />
               </div>
             )}
@@ -191,7 +191,7 @@ export function OptionalFieldsEditor({
                   onClick={() =>
                     onLifecycleChange({ startSlot: 0, endSlot: 0 })
                   }
-                  className="text-xs text-blue-400 hover:text-blue-300"
+                  className="text-xs text-teal-400 hover:text-teal-300"
                 >
                   Add
                 </button>
@@ -213,7 +213,7 @@ export function OptionalFieldsEditor({
                         startSlot: parseInt(e.target.value) || 0,
                       })
                     }
-                    className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-mono"
+                    className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
                   />
                 </div>
                 <div>
@@ -230,7 +230,7 @@ export function OptionalFieldsEditor({
                         endSlot: parseInt(e.target.value) || 0,
                       })
                     }
-                    className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-mono"
+                    className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
                   />
                 </div>
               </div>

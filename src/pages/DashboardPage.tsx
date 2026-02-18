@@ -43,20 +43,20 @@ export function DashboardPage() {
   return (
     <div className="space-y-12 animate-fadeIn">
       {/* Hero section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border border-slate-700/50 p-8 md:p-12">
-        {/* Background decorations */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-600/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0a0f1a] via-[#0d1220] to-[#0a0f1a] border border-slate-700/30 p-8 md:p-12">
+        {/* Background decorations — teal + violet washes */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-violet-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
 
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold tracking-wide">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs font-semibold tracking-wide">
               <Sparkles className="w-3.5 h-3.5" />
               Label 17 Proof of Concept
             </div>
             <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide ${
               mode === 'simulated'
-                ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
+                ? 'bg-teal-500/10 border border-teal-500/20 text-teal-400'
                 : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
             }`}>
               <Activity className="w-3 h-3" />
@@ -64,20 +64,20 @@ export function DashboardPage() {
             </div>
           </div>
 
-          <h1 className="text-3xl md:text-5xl font-bold text-white mb-4 leading-tight">
+          <h1 className="font-heading text-3xl md:text-5xl font-bold text-white mb-4 leading-tight">
             On-Chain Surveys
-            <span className="text-blue-400"> & Polls</span>
+            <span className="brand-gradient-text"> & Polls</span>
           </h1>
           <p className="text-base md:text-lg text-slate-400 max-w-2xl mb-8 leading-relaxed">
             A standardized transaction metadata format for creating and tallying
             on-chain surveys on Cardano, using label{' '}
-            <code className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-md font-mono text-sm">17</code>.
+            <code className="text-teal-400 bg-teal-500/10 px-1.5 py-0.5 rounded-md font-code text-sm">17</code>.
           </p>
 
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => navigate('/create')}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-blue-600/25 hover:shadow-blue-500/30 hover:-translate-y-0.5 active:translate-y-0"
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-violet-600 hover:from-teal-500 hover:to-violet-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-teal-600/25 hover:shadow-teal-500/30 hover:-translate-y-0.5 active:translate-y-0"
             >
               <PlusCircle className="w-5 h-5" />
               Create Survey
@@ -100,9 +100,9 @@ export function DashboardPage() {
             label: 'Total Surveys',
             value: surveyCount,
             icon: Vote,
-            color: 'text-blue-400',
-            bg: 'bg-blue-500/10',
-            borderColor: 'border-blue-500/20',
+            color: 'text-teal-400',
+            bg: 'bg-teal-500/10',
+            borderColor: 'border-teal-500/20',
           },
           {
             label: 'Responses',
@@ -116,9 +116,9 @@ export function DashboardPage() {
             label: 'Unique Voters',
             value: uniqueVoters,
             icon: Users,
-            color: 'text-purple-400',
-            bg: 'bg-purple-500/10',
-            borderColor: 'border-purple-500/20',
+            color: 'text-violet-400',
+            bg: 'bg-violet-500/10',
+            borderColor: 'border-violet-500/20',
           },
           {
             label: 'Avg Responses',
@@ -131,12 +131,12 @@ export function DashboardPage() {
         ].map(({ label, value, icon: Icon, color, bg, borderColor }) => (
           <div
             key={label}
-            className={`${bg} border ${borderColor} rounded-xl p-5 transition-all duration-200 hover:scale-[1.02]`}
+            className={`glow-card ${bg} border ${borderColor} rounded-xl p-5 transition-all duration-200 hover:scale-[1.02]`}
           >
             <div className="flex items-center justify-between mb-3">
               <Icon className={`w-5 h-5 ${color}`} />
             </div>
-            <div className="text-2xl md:text-3xl font-bold text-white mb-0.5">{value.toLocaleString()}</div>
+            <div className="text-2xl md:text-3xl font-bold text-white mb-0.5 font-heading">{value.toLocaleString()}</div>
             <div className="text-xs text-slate-500 font-medium">{label}</div>
           </div>
         ))}
@@ -147,12 +147,12 @@ export function DashboardPage() {
         <div>
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-xl font-bold text-white">Active Surveys</h2>
+              <h2 className="text-xl font-bold text-white font-heading">Active Surveys</h2>
               <p className="text-sm text-slate-500 mt-0.5">Most popular surveys by response count</p>
             </div>
             <button
               onClick={() => navigate('/surveys')}
-              className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 font-medium transition-colors"
+              className="flex items-center gap-1.5 text-sm text-teal-400 hover:text-teal-300 font-medium transition-colors"
             >
               View all
               <ArrowRight className="w-4 h-4" />
@@ -174,7 +174,7 @@ export function DashboardPage() {
       {/* Features section */}
       <div>
         <div className="mb-5">
-          <h2 className="text-xl font-bold text-white">What This Demonstrates</h2>
+          <h2 className="text-xl font-bold text-white font-heading">What This Demonstrates</h2>
           <p className="text-sm text-slate-500 mt-0.5">Core specification capabilities implemented in this proof of concept</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -183,9 +183,9 @@ export function DashboardPage() {
               icon: FileJson,
               title: 'Metadata Format',
               desc: 'Label 17 payloads with surveyDetails and surveyResponse structures following the specification',
-              color: 'text-blue-400',
-              bg: 'from-blue-500/5 to-blue-500/0',
-              border: 'border-blue-500/10 hover:border-blue-500/30',
+              color: 'text-teal-400',
+              bg: 'from-teal-500/5 to-teal-500/0',
+              border: 'border-teal-500/10 hover:border-teal-500/30',
             },
             {
               icon: Hash,
@@ -199,9 +199,9 @@ export function DashboardPage() {
               icon: Layers,
               title: 'Three Method Types',
               desc: 'Single-choice, multi-select, and numeric-range with full constraint validation',
-              color: 'text-purple-400',
-              bg: 'from-purple-500/5 to-purple-500/0',
-              border: 'border-purple-500/10 hover:border-purple-500/30',
+              color: 'text-violet-400',
+              bg: 'from-violet-500/5 to-violet-500/0',
+              border: 'border-violet-500/10 hover:border-violet-500/30',
             },
             {
               icon: Shield,
@@ -230,12 +230,12 @@ export function DashboardPage() {
           ].map(({ icon: Icon, title, desc, color, bg, border }) => (
             <div
               key={title}
-              className={`bg-gradient-to-br ${bg} border ${border} rounded-xl p-6 transition-all duration-300 hover:-translate-y-0.5`}
+              className={`glow-card bg-gradient-to-br ${bg} border ${border} rounded-xl p-6 transition-all duration-300 hover:-translate-y-0.5`}
             >
               <div className={`inline-flex p-2.5 rounded-lg bg-slate-800/50 mb-4`}>
                 <Icon className={`w-5 h-5 ${color}`} />
               </div>
-              <h3 className="text-white font-semibold text-sm mb-2">{title}</h3>
+              <h3 className="text-white font-semibold text-sm mb-2 font-heading">{title}</h3>
               <p className="text-xs text-slate-400 leading-relaxed">{desc}</p>
             </div>
           ))}
