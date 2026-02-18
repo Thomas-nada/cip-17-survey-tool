@@ -32,10 +32,10 @@ export function Header() {
             </div>
             <div className="hidden sm:block">
               <h1 className="text-white font-bold text-lg leading-tight">
-                Cardano Surveys
+                Label 17
               </h1>
               <p className="text-slate-500 text-[10px] font-medium tracking-wider uppercase">
-                Label 17 On-Chain Polls
+                On-Chain Surveys
               </p>
             </div>
           </button>
