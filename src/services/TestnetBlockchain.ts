@@ -2,8 +2,8 @@
  * Testnet Blockchain Service
  *
  * Connects to the Cardano Preview Testnet via Blockfrost API.
- * Uses CIP-30 wallet API for transaction signing and submission.
- * Uses @meshsdk/core for transaction construction with metadata.
+ * Uses Mesh SDK's BrowserWallet for CIP-30 interaction (parsed UTxOs).
+ * Uses MeshTxBuilder for offline transaction construction with metadata.
  */
 import type { BlockchainService } from './BlockchainService.ts';
 import type {
@@ -18,50 +18,55 @@ import { BlockfrostClient } from './BlockfrostClient.ts';
 import { computeSurveyHash } from '../utils/hashing.ts';
 import { validateSurveyDetails } from '../utils/validation.ts';
 import { METADATA_LABEL } from '../constants/methodTypes.ts';
-import { MeshTxBuilder } from '@meshsdk/core';
-import { BlockfrostProvider } from '@meshsdk/core';
-
-// CIP-30 Wallet API types
-interface CIP30WalletAPI {
-  getChangeAddress(): Promise<string>;
-  getUtxos(): Promise<string[] | undefined>;
-  signTx(tx: string, partialSign?: boolean): Promise<string>;
-  submitTx(tx: string): Promise<string>;
-  getUsedAddresses(): Promise<string[]>;
-  getNetworkId(): Promise<number>;
-  getBalance(): Promise<string>;
-}
+import { BrowserWallet, MeshTxBuilder } from '@meshsdk/core';
 
 export class TestnetBlockchain implements BlockchainService {
   readonly mode = 'testnet' as const;
 
   private blockfrost: BlockfrostClient;
-  private getWallet: () => CIP30WalletAPI | null;
-  private blockfrostApiKey: string;
+  private connectedWalletName: string | null = null;
 
   constructor(
     blockfrost: BlockfrostClient,
-    getWallet: () => CIP30WalletAPI | null,
-    blockfrostApiKey?: string
+    _getWallet: () => unknown, // kept for interface compat, we use BrowserWallet instead
+    _blockfrostApiKey?: string
   ) {
     this.blockfrost = blockfrost;
-    this.getWallet = getWallet;
-    this.blockfrostApiKey = blockfrostApiKey || '';
+  }
+
+  /** Store which wallet name is connected so BrowserWallet can re-enable */
+  setConnectedWallet(walletName: string | null) {
+    this.connectedWalletName = walletName;
+  }
+
+  /**
+   * Get or re-enable the BrowserWallet instance.
+   * BrowserWallet wraps CIP-30 and returns parsed UTxO objects.
+   */
+  private async getWallet(): Promise<BrowserWallet> {
+    if (!this.connectedWalletName) {
+      throw new Error('Wallet not connected. Please connect a CIP-30 wallet.');
+    }
+    // BrowserWallet.enable() re-uses the existing CIP-30 connection
+    // (won't re-prompt the user if already authorized)
+    return BrowserWallet.enable(this.connectedWalletName);
   }
 
   /**
    * Build, sign, and submit a transaction with label 17 metadata.
-   * Uses MeshTxBuilder for construction, CIP-30 wallet for signing.
+   *
+   * Uses MeshTxBuilder in offline mode — UTxOs come from the wallet directly
+   * via BrowserWallet.getUtxos() (already parsed), so no Blockfrost UTxO
+   * lookups are needed. Coin selection is handled by selectUtxosFrom().
    */
   private async buildAndSubmitMetadataTx(
     metadataPayload: Record<string, unknown>
   ): Promise<string> {
-    const wallet = this.getWallet();
-    if (!wallet) throw new Error('Wallet not connected. Please connect a CIP-30 wallet.');
+    const wallet = await this.getWallet();
 
-    // Get wallet UTxOs and change address
-    const utxosHex = await wallet.getUtxos();
-    if (!utxosHex || utxosHex.length === 0) {
+    // Get parsed UTxOs and change address from BrowserWallet
+    const utxos = await wallet.getUtxos();
+    if (!utxos || utxos.length === 0) {
       throw new Error(
         'No UTxOs found in wallet. Please fund your wallet with test ADA from the Cardano Testnet Faucet.'
       );
@@ -69,60 +74,27 @@ export class TestnetBlockchain implements BlockchainService {
 
     const changeAddress = await wallet.getChangeAddress();
 
-    // Create a Blockfrost provider for tx building (fee estimation, etc.)
-    // We pass the API key if available
-    const blockfrostProvider = new BlockfrostProvider(
-      this.blockfrostApiKey || 'your-project-id'
-    );
+    // Build transaction offline — no fetcher needed
+    const txBuilder = new MeshTxBuilder();
 
-    // Build transaction with MeshTxBuilder
-    const txBuilder = new MeshTxBuilder({
-      fetcher: blockfrostProvider,
-      evaluator: blockfrostProvider,
-    });
-
-    // Add UTxOs as inputs — pick the first one with enough ADA
-    // MeshTxBuilder will handle coin selection via .complete()
-    // We need to provide UTxOs for the builder to select from
+    // Set change address for leftover value
     txBuilder.changeAddress(changeAddress);
 
     // Add metadata with label 17
-    // The metadataPayload is { 17: { ... } } — we pass the inner object
     const label17Content = metadataPayload[METADATA_LABEL.toString()] as object;
     txBuilder.metadataValue(METADATA_LABEL.toString(), label17Content);
 
-    // We need to send a minimal transaction (ADA to ourselves) to carry the metadata
-    // Send min ADA back to change address to create a valid tx output
+    // Minimal self-payment to create a valid tx that carries metadata
     txBuilder.txOut(changeAddress, [{ unit: 'lovelace', quantity: '2000000' }]);
 
-    // Add wallet UTxOs for input selection
-    // MeshTxBuilder can use raw hex UTxOs by selecting them
-    for (const utxoHex of utxosHex) {
-      // Parse the UTxO hex to get txHash and index
-      // We'll let the builder handle this via selectUtxosFrom
-      try {
-        txBuilder.txInCollateral(utxoHex, 0);
-      } catch {
-        // Skip invalid UTxOs for collateral — they'll be used as regular inputs
-      }
-    }
+    // Provide wallet UTxOs for coin selection (no Blockfrost lookup)
+    txBuilder.selectUtxosFrom(utxos);
 
-    // Complete the transaction — this handles fee calculation, coin selection
-    let unsignedTx: string;
-    try {
-      unsignedTx = await txBuilder.complete();
-    } catch (buildErr) {
-      // If MeshTxBuilder fails (e.g. no provider configured properly),
-      // fall back to a simpler approach using the wallet's raw UTxOs
-      console.warn('MeshTxBuilder.complete() failed, trying simplified approach:', buildErr);
-      throw new Error(
-        `Transaction build failed: ${buildErr instanceof Error ? buildErr.message : 'Unknown error'}. ` +
-        'Make sure your Blockfrost API key is configured and your wallet has test ADA.'
-      );
-    }
+    // Build the balanced transaction
+    const unsignedTx = txBuilder.completeSync();
 
     // Sign with CIP-30 wallet
-    const signedTx = await wallet.signTx(unsignedTx, false);
+    const signedTx = await wallet.signTx(unsignedTx);
 
     // Submit via CIP-30 wallet
     const txHash = await wallet.submitTx(signedTx);
@@ -134,9 +106,6 @@ export class TestnetBlockchain implements BlockchainService {
     details: SurveyDetails,
     msg?: string[]
   ): Promise<CreateSurveyResult> {
-    const wallet = this.getWallet();
-    if (!wallet) throw new Error('Wallet not connected. Please connect a CIP-30 wallet.');
-
     // Validate
     const validation = validateSurveyDetails(details);
     if (!validation.valid) {
@@ -169,8 +138,7 @@ export class TestnetBlockchain implements BlockchainService {
     response: SurveyResponse,
     msg?: string[]
   ): Promise<SubmitResponseResult> {
-    const wallet = this.getWallet();
-    if (!wallet) throw new Error('Wallet not connected. Please connect a CIP-30 wallet.');
+    const wallet = await this.getWallet();
 
     const innerPayload: Record<string, unknown> = {
       ...(msg && msg.length > 0 ? { msg } : {}),

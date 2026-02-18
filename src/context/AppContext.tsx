@@ -169,11 +169,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     error: walletError,
     connect: walletConnect,
     disconnect: walletDisconnect,
-    getWalletApi,
   } = useCardanoWallet();
 
   // Keep simulated blockchain as singleton across re-renders
   const simulatedRef = useRef(new SimulatedBlockchain());
+  // Keep testnet blockchain ref so we can call setConnectedWallet on it
+  const testnetRef = useRef<TestnetBlockchain | null>(null);
 
   // Auto-seed simulated blockchain on mount
   useEffect(() => {
@@ -224,6 +225,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Disconnect wallet
   const disconnect = useCallback(() => {
     walletDisconnect();
+    // Clear wallet name on testnet blockchain
+    if (testnetRef.current) {
+      testnetRef.current.setConnectedWallet(null);
+    }
   }, [walletDisconnect]);
 
   const blockchain = useMemo<BlockchainService>(() => {
@@ -234,10 +239,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         blockfrostApiKey || 'your-project-id',
         'preview'
       );
-      // Pass the real wallet getter and API key to TestnetBlockchain
-      return new TestnetBlockchain(client, getWalletApi, blockfrostApiKey);
+      const testnet = new TestnetBlockchain(client, () => null);
+      testnetRef.current = testnet;
+      // If wallet is already connected, set its name
+      if (connectedWallet) {
+        testnet.setConnectedWallet(connectedWallet.id);
+      }
+      return testnet;
     }
-  }, [mode, blockfrostApiKey, getWalletApi]);
+  }, [mode, blockfrostApiKey, connectedWallet]);
+
+  // Sync wallet name to testnet blockchain when wallet changes
+  useEffect(() => {
+    if (testnetRef.current) {
+      testnetRef.current.setConnectedWallet(connectedWallet?.id ?? null);
+    }
+  }, [connectedWallet]);
 
   const walletState = useMemo(() => ({
     availableWallets,
