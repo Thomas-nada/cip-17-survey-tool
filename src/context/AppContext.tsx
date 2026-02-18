@@ -5,7 +5,7 @@
  * - App mode (simulated / testnet)
  * - Blockchain service instance
  * - Survey state management
- * - Wallet connection state (testnet mode)
+ * - Wallet connection state (CIP-30)
  * - Auto-seeding of simulated blockchain with demo data
  */
 import React, {
@@ -27,6 +27,11 @@ import type {
   StoredResponse,
   TallyResult,
 } from '../types/survey.ts';
+import {
+  useCardanoWallet,
+  type CIP30WalletAPI,
+  type DetectedWallet,
+} from '../hooks/useCardanoWallet.ts';
 
 // ─── Types ──────────────────────────────────────────────────────────
 export type AppMode = 'simulated' | 'testnet';
@@ -58,6 +63,18 @@ interface AppContextValue {
   dispatch: React.Dispatch<SurveyAction>;
   blockfrostApiKey: string;
   setBlockfrostApiKey: (key: string) => void;
+  // Wallet state
+  wallet: {
+    availableWallets: DetectedWallet[];
+    connectedWallet: DetectedWallet | null;
+    walletApi: CIP30WalletAPI | null;
+    address: string | null;
+    networkId: number | null;
+    connecting: boolean;
+    error: string | null;
+    connect: (walletId: string) => Promise<CIP30WalletAPI | undefined>;
+    disconnect: () => void;
+  };
 }
 
 // ─── Reducer ────────────────────────────────────────────────────────
@@ -141,6 +158,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [blockfrostApiKey, setBlockfrostApiKey] = React.useState('');
   const [state, dispatch] = useReducer(surveyReducer, initialState);
 
+  // CIP-30 wallet hook
+  const {
+    availableWallets,
+    connectedWallet,
+    walletApi,
+    address,
+    networkId,
+    connecting,
+    error: walletError,
+    connect: walletConnect,
+    disconnect: walletDisconnect,
+    getWalletApi,
+  } = useCardanoWallet();
+
   // Keep simulated blockchain as singleton across re-renders
   const simulatedRef = useRef(new SimulatedBlockchain());
 
@@ -175,6 +206,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Connect wallet — auto-switch to testnet mode
+  const connect = useCallback(async (walletId: string) => {
+    try {
+      const api = await walletConnect(walletId);
+      // Auto-switch to testnet mode when wallet connects
+      if (mode !== 'testnet') {
+        setModeRaw('testnet');
+        dispatch({ type: 'CLEAR_STATE' });
+      }
+      return api;
+    } catch (err) {
+      throw err;
+    }
+  }, [walletConnect, mode]);
+
+  // Disconnect wallet
+  const disconnect = useCallback(() => {
+    walletDisconnect();
+  }, [walletDisconnect]);
+
   const blockchain = useMemo<BlockchainService>(() => {
     if (mode === 'simulated') {
       return simulatedRef.current;
@@ -183,9 +234,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         blockfrostApiKey || 'your-project-id',
         'preview'
       );
-      return new TestnetBlockchain(client, () => null);
+      // Pass the real wallet getter and API key to TestnetBlockchain
+      return new TestnetBlockchain(client, getWalletApi, blockfrostApiKey);
     }
-  }, [mode, blockfrostApiKey]);
+  }, [mode, blockfrostApiKey, getWalletApi]);
+
+  const walletState = useMemo(() => ({
+    availableWallets,
+    connectedWallet,
+    walletApi,
+    address,
+    networkId,
+    connecting,
+    error: walletError,
+    connect,
+    disconnect,
+  }), [
+    availableWallets, connectedWallet, walletApi,
+    address, networkId, connecting, walletError,
+    connect, disconnect,
+  ]);
 
   const value = useMemo(
     () => ({
@@ -196,8 +264,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       dispatch,
       blockfrostApiKey,
       setBlockfrostApiKey,
+      wallet: walletState,
     }),
-    [mode, setMode, blockchain, state, blockfrostApiKey]
+    [mode, setMode, blockchain, state, blockfrostApiKey, walletState]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

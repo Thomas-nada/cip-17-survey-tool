@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@meshsdk/core": "^1.9.0-beta.98",
     "blakejs": "^1.2.1",
     "cbor2": "^2.2.1",
     "lucide-react": "^0.574.0",
@@ -19,6 +20,7 @@
     "react-router-dom": "^7.13.0",
     "recharts": "^3.7.0",
     "uuid": "^13.0.0",
+    "vite-plugin-node-polyfills": "^0.25.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

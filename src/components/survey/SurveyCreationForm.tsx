@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
-import { Send, AlertCircle } from 'lucide-react';
+import { Send, AlertCircle, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { MethodTypeSelector } from './MethodTypeSelector.tsx';
 import { OptionsEditor } from './OptionsEditor.tsx';
@@ -29,7 +29,7 @@ interface Props {
 }
 
 export function SurveyCreationForm({ onCreated }: Props) {
-  const { blockchain, dispatch } = useApp();
+  const { blockchain, dispatch, mode, wallet } = useApp();
 
   // Form state
   const [title, setTitle] = useState('');
@@ -237,12 +237,25 @@ export function SurveyCreationForm({ onCreated }: Props) {
             </div>
           )}
 
+          {/* Wallet connection prompt for testnet mode */}
+          {mode === 'testnet' && !wallet.connectedWallet && (
+            <div className="flex items-center gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl animate-fadeIn">
+              <Wallet className="w-5 h-5 text-amber-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-amber-300">Wallet not connected</p>
+                <p className="text-xs text-amber-400/70 mt-0.5">
+                  Connect a CIP-30 wallet to create surveys on-chain. Click "Connect Wallet" in the header.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Submit */}
           <button
             type="submit"
-            disabled={!validation.valid || submitting}
+            disabled={!validation.valid || submitting || (mode === 'testnet' && !wallet.connectedWallet)}
             className={`w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm transition-all ${
-              validation.valid && !submitting
+              validation.valid && !submitting && !(mode === 'testnet' && !wallet.connectedWallet)
                 ? 'bg-gradient-to-r from-teal-600 to-violet-600 hover:from-teal-500 hover:to-violet-500 text-white shadow-lg shadow-teal-600/20'
                 : 'bg-slate-700 text-slate-500 cursor-not-allowed'
             }`}

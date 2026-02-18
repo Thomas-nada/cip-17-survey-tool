@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Send, AlertCircle, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Send, AlertCircle, CheckCircle2, ChevronDown, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../../context/AppContext.tsx';
 import { validateSurveyResponse } from '../../utils/validation.ts';
@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function SurveyResponseForm({ survey, onSubmitted }: Props) {
-  const { blockchain, dispatch } = useApp();
+  const { blockchain, dispatch, mode, wallet } = useApp();
   const { details } = survey;
 
   // Response state
@@ -282,13 +282,26 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
         </div>
       )}
 
+      {/* Wallet connection prompt for testnet mode */}
+      {mode === 'testnet' && !wallet.connectedWallet && (
+        <div className="flex items-center gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl animate-fadeIn">
+          <Wallet className="w-5 h-5 text-amber-400 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-300">Wallet not connected</p>
+            <p className="text-xs text-amber-400/70 mt-0.5">
+              Connect a CIP-30 wallet to submit your vote on-chain. Click "Connect Wallet" in the header.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Submit */}
       <div className="space-y-2">
         <button
           type="submit"
-          disabled={!validation.valid || submitting}
+          disabled={!validation.valid || submitting || (mode === 'testnet' && !wallet.connectedWallet)}
           className={`w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
-            validation.valid && !submitting
+            validation.valid && !submitting && !(mode === 'testnet' && !wallet.connectedWallet)
               ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-lg shadow-teal-600/20 hover:shadow-teal-500/25 hover:-translate-y-0.5 active:translate-y-0'
               : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
           }`}
