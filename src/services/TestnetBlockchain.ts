@@ -20,6 +20,82 @@ import { validateSurveyDetails } from '../utils/validation.ts';
 import { METADATA_LABEL } from '../constants/methodTypes.ts';
 import { BrowserWallet, MeshTxBuilder } from '@meshsdk/core';
 
+// ─── Cardano Metadata Helpers ───────────────────────────────────────
+// Cardano transaction metadata strings must be ≤64 bytes.
+// Longer strings are split into arrays of ≤64-byte chunks.
+// This is the standard approach (same pattern as CIP-20 messages).
+
+const MAX_METADATA_STRING_BYTES = 64;
+
+/**
+ * Split a string into chunks of at most `maxBytes` UTF-8 bytes.
+ * Splits on byte boundaries, never in the middle of a multi-byte char.
+ */
+function chunkString(str: string, maxBytes: number): string[] {
+  const encoder = new TextEncoder();
+  const encoded = encoder.encode(str);
+  if (encoded.length <= maxBytes) return [str];
+
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
+  let offset = 0;
+  while (offset < encoded.length) {
+    let end = Math.min(offset + maxBytes, encoded.length);
+    // Don't split in the middle of a multi-byte UTF-8 sequence
+    while (end > offset && (encoded[end] & 0xc0) === 0x80) {
+      end--;
+    }
+    chunks.push(decoder.decode(encoded.slice(offset, end)));
+    offset = end;
+  }
+  return chunks;
+}
+
+/**
+ * Recursively prepare a JS value for Cardano transaction metadata.
+ * - Strings >64 bytes → array of ≤64 byte chunks
+ * - Arrays → recursively process elements
+ * - Objects → recursively process values (keys are also chunked if needed)
+ * - Numbers, booleans → pass through (booleans as 0/1 integers)
+ */
+function toCardanoMetadata(value: unknown): unknown {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    const chunks = chunkString(value, MAX_METADATA_STRING_BYTES);
+    return chunks.length === 1 ? chunks[0] : chunks;
+  }
+  if (typeof value === 'number') {
+    // Cardano metadata supports integers natively.
+    // Floats are not supported — convert to string if fractional.
+    if (Number.isInteger(value)) return value;
+    return String(value);
+  }
+  if (typeof value === 'bigint') {
+    return value;
+  }
+  if (typeof value === 'boolean') {
+    return value ? 1 : 0;
+  }
+  if (Array.isArray(value)) {
+    return value.map(toCardanoMetadata);
+  }
+  if (typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      // Keys are typically short, but chunk them too for safety
+      const safeKey = chunkString(k, MAX_METADATA_STRING_BYTES);
+      const key = safeKey.length === 1 ? safeKey[0] : safeKey.join('');
+      result[key] = toCardanoMetadata(v);
+    }
+    return result;
+  }
+  return String(value);
+}
+
+// ─── Service ────────────────────────────────────────────────────────
+
 export class TestnetBlockchain implements BlockchainService {
   readonly mode = 'testnet' as const;
 
@@ -80,9 +156,12 @@ export class TestnetBlockchain implements BlockchainService {
     // Set change address for leftover value
     txBuilder.changeAddress(changeAddress);
 
+    // Prepare metadata for Cardano's 64-byte string limit
+    const rawContent = metadataPayload[METADATA_LABEL.toString()];
+    const safeContent = toCardanoMetadata(rawContent) as object;
+
     // Add metadata with label 17
-    const label17Content = metadataPayload[METADATA_LABEL.toString()] as object;
-    txBuilder.metadataValue(METADATA_LABEL.toString(), label17Content);
+    txBuilder.metadataValue(METADATA_LABEL.toString(), safeContent);
 
     // Minimal self-payment to create a valid tx that carries metadata
     txBuilder.txOut(changeAddress, [{ unit: 'lovelace', quantity: '2000000' }]);
