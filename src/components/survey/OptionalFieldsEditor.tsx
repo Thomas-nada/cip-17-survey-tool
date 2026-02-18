@@ -175,7 +175,7 @@ export function OptionalFieldsEditor({
           <div>
             <div className="flex items-center gap-2 mb-2">
               <label className="text-sm font-medium text-slate-300">
-                Lifecycle (Slot Window)
+                End Epoch
               </label>
               {lifecycle ? (
                 <button
@@ -189,7 +189,7 @@ export function OptionalFieldsEditor({
                 <button
                   type="button"
                   onClick={() =>
-                    onLifecycleChange({ startSlot: 0, endSlot: 0 })
+                    onLifecycleChange({ endEpoch: 0 })
                   }
                   className="text-xs text-teal-400 hover:text-teal-300"
                 >
@@ -198,40 +198,26 @@ export function OptionalFieldsEditor({
               )}
             </div>
             {lifecycle && (
-              <div className="flex gap-3 pl-4 border-l-2 border-slate-700">
+              <div className="pl-4 border-l-2 border-slate-700">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">
-                    Start Slot
+                    Survey closes at end of epoch
                   </label>
                   <input
                     type="number"
                     min={0}
-                    value={lifecycle.startSlot}
+                    value={lifecycle.endEpoch}
                     onChange={(e) =>
                       onLifecycleChange({
-                        ...lifecycle,
-                        startSlot: parseInt(e.target.value) || 0,
+                        endEpoch: parseInt(e.target.value) || 0,
                       })
                     }
-                    className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
+                    placeholder="e.g. 172"
+                    className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    End Slot
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={lifecycle.endSlot}
-                    onChange={(e) =>
-                      onLifecycleChange({
-                        ...lifecycle,
-                        endSlot: parseInt(e.target.value) || 0,
-                      })
-                    }
-                    className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
-                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Survey is live immediately after submission
+                  </p>
                 </div>
               </div>
             )}

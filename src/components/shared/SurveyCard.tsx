@@ -103,7 +103,7 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
             {details.lifecycle && (
               <span className="hidden sm:flex items-center gap-1.5">
                 <Clock className="w-3 h-3" />
-                Slot {details.lifecycle.startSlot.toLocaleString()} - {details.lifecycle.endSlot.toLocaleString()}
+                Ends epoch {details.lifecycle.endEpoch.toLocaleString()}
               </span>
             )}
           </div>

@@ -37,8 +37,7 @@ export const SEED_SURVEYS: SeedSurvey[] = [
       eligibility: ['Stakeholder'],
       voteWeighting: 'CredentialBased',
       lifecycle: {
-        startSlot: 120_000_000,
-        endSlot: 120_432_000,
+        endEpoch: 172,
       },
     },
     msg: ['Dijkstra Hard-Fork CIP Shortlist'],
@@ -84,8 +83,7 @@ export const SEED_SURVEYS: SeedSurvey[] = [
       eligibility: ['DRep', 'SPO'],
       voteWeighting: 'StakeBased',
       lifecycle: {
-        startSlot: 119_500_000,
-        endSlot: 120_200_000,
+        endEpoch: 170,
       },
     },
     msg: ['Treasury Withdrawal Approval'],

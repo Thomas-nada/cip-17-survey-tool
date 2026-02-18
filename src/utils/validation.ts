@@ -131,8 +131,8 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
   }
 
   if (details.lifecycle) {
-    if (details.lifecycle.startSlot > details.lifecycle.endSlot) {
-      errors.push('lifecycle: startSlot must be <= endSlot');
+    if (details.lifecycle.endEpoch < 0 || !Number.isInteger(details.lifecycle.endEpoch)) {
+      errors.push('lifecycle: endEpoch must be a non-negative integer');
     }
   }
 

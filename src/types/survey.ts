@@ -27,8 +27,7 @@ export interface ReferenceAction {
 }
 
 export interface Lifecycle {
-  startSlot: number;
-  endSlot: number;
+  endEpoch: number;
 }
 
 // ─── Survey Details (label 17 surveyDetails payload) ────────────────

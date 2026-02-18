@@ -72,8 +72,7 @@ function surveyDetailsToMap(details: SurveyDetails): Map<string, unknown> {
   }
   if (details.lifecycle !== undefined) {
     const lc = new Map<string, unknown>();
-    lc.set('startSlot', details.lifecycle.startSlot);
-    lc.set('endSlot', details.lifecycle.endSlot);
+    lc.set('endEpoch', details.lifecycle.endEpoch);
     m.set('lifecycle', lc);
   }
 
