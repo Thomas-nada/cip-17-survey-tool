@@ -1,7 +1,26 @@
 import { useApp } from '../../context/AppContext.tsx';
-import { Vote, Wifi, WifiOff, Settings, PlusCircle, LayoutGrid, List } from 'lucide-react';
+import { Wifi, WifiOff, Settings, PlusCircle, LayoutGrid, List } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+
+/** Inline SVG logo — the "17" brand mark with teal→violet gradient */
+function LogoMark({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+      <defs>
+        <linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#14b8a6"/>
+          <stop offset="100%" stopColor="#8b5cf6"/>
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" rx="14" fill="#07090f"/>
+      <rect y="0" width="64" height="2" rx="1" fill="url(#hg)"/>
+      <path d="M 13 16 L 20 14 L 20 44 L 25 44 L 25 49 L 10 49 L 10 44 L 15 44 L 15 21 L 12 22 L 10 17.5 Z" fill="url(#hg)"/>
+      <path d="M 28 14 L 54 14 L 54 19 L 40 49 L 34 49 L 47 21 L 47 19 L 28 19 Z" fill="url(#hg)"/>
+      <rect x="32" y="29" width="13" height="4" rx="1" fill="url(#hg)" opacity="0.85"/>
+    </svg>
+  );
+}
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: LayoutGrid },
@@ -25,9 +44,7 @@ export function Header() {
             className="flex items-center gap-3 group"
           >
             <div className="relative">
-              <div className="bg-gradient-to-br from-teal-500 to-violet-600 p-2 rounded-xl group-hover:from-teal-400 group-hover:to-violet-500 transition-all shadow-lg shadow-teal-500/20">
-                <Vote className="w-5 h-5 text-white" />
-              </div>
+              <LogoMark className="w-10 h-10 rounded-xl shadow-lg shadow-teal-500/20 group-hover:shadow-teal-400/30 transition-shadow" />
               <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-[#07090f] animate-pulse" />
             </div>
             <div className="hidden sm:block font-heading">

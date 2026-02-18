@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded background -->
+  <rect width="64" height="64" rx="14" fill="#07090f"/>
+
+  <!-- Top gradient stripe -->
+  <rect y="0" width="64" height="2" rx="1" fill="url(#g)"/>
+
+  <!-- "1" — bold, geometric -->
+  <path d="M 13 16 L 20 14 L 20 44 L 25 44 L 25 49 L 10 49 L 10 44 L 15 44 L 15 21 L 12 22 L 10 17.5 Z" fill="url(#g)"/>
+
+  <!-- "7" — bold with crossbar -->
+  <path d="M 28 14 L 54 14 L 54 19 L 40 49 L 34 49 L 47 21 L 47 19 L 28 19 Z" fill="url(#g)"/>
+
+  <!-- Crossbar on 7 -->
+  <rect x="32" y="29" width="13" height="4" rx="1" fill="url(#g)" opacity="0.85"/>
+</svg>

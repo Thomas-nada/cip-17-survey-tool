@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <!-- Brand gradient: teal → violet -->
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <!-- Subtle glow behind the numerals -->
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#14b8a6" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Background gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a0e17"/>
+      <stop offset="100%" stop-color="#07090f"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="96" fill="url(#bgGrad)"/>
+
+  <!-- Accent stripe across top -->
+  <rect y="0" width="512" height="6" rx="3" fill="url(#brandGrad)"/>
+
+  <!-- Soft ambient glow -->
+  <ellipse cx="256" cy="260" rx="200" ry="180" fill="url(#glow)"/>
+
+  <!-- Bold "17" numerals — Space Grotesk inspired geometric style -->
+  <!-- The "1" — a clean, modern numeral with a subtle serif foot -->
+  <path d="
+    M 120 140
+    L 180 120
+    L 180 340
+    L 220 340
+    L 220 380
+    L 100 380
+    L 100 340
+    L 140 340
+    L 140 172
+    L 110 182
+    L 100 148
+    Z
+  " fill="url(#brandGrad)"/>
+
+  <!-- The "7" — bold angular stroke with a horizontal crossbar -->
+  <path d="
+    M 240 120
+    L 420 120
+    L 420 160
+    L 330 380
+    L 284 380
+    L 370 172
+    L 370 160
+    L 240 160
+    Z
+  " fill="url(#brandGrad)"/>
+
+  <!-- Crossbar on the 7 -->
+  <rect x="270" y="232" width="100" height="32" rx="4" fill="url(#brandGrad)" opacity="0.85"/>
+
+  <!-- Subtle "On-Chain Surveys" tagline below -->
+  <text x="256" y="440" text-anchor="middle" font-family="system-ui, sans-serif" font-size="36" font-weight="600" letter-spacing="6" fill="#475569">
+    ON-CHAIN
+  </text>
+  <text x="256" y="476" text-anchor="middle" font-family="system-ui, sans-serif" font-size="30" font-weight="500" letter-spacing="8" fill="#334155">
+    SURVEYS
+  </text>
+</svg>
