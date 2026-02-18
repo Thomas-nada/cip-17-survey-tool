@@ -1,5 +1,5 @@
 /**
- * CIP-17 validation logic for survey definitions and responses.
+ * Label 17 validation logic for survey definitions and responses.
  * Enforces all method-type-specific rules from the specification.
  */
 import type {

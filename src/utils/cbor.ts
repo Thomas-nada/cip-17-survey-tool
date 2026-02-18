@@ -1,7 +1,7 @@
 /**
- * Canonical CBOR encoding for CIP-17 survey hashing.
+ * Canonical CBOR encoding for Label 17 survey hashing.
  *
- * Per the CIP specification:
+ * Per the specification:
  * - Build envelope: {17: {"surveyDetails": <details>}}
  * - Exclude "msg" from the hash preimage
  * - Serialize as canonical CBOR (RFC 8949 deterministic map key ordering)

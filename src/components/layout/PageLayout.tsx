@@ -37,7 +37,7 @@ export function PageLayout({ children }: { children: ReactNode }) {
       {/* Footer */}
       <footer className="border-t border-slate-800/50 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between text-xs text-slate-600">
-          <span>CIP-17 On-Chain Surveys & Polls</span>
+          <span>Cardano On-Chain Surveys & Polls</span>
           <span>Proof of Concept</span>
         </div>
       </footer>

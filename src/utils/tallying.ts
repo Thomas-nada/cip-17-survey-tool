@@ -1,5 +1,5 @@
 /**
- * CIP-17 Tallying Logic
+ * Label 17 Tallying Logic
  *
  * Implements:
  * - Response deduplication by responseCredential (latest-valid-response-wins)

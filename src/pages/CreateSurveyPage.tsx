@@ -22,7 +22,7 @@ export function CreateSurveyPage() {
           <div>
             <h2 className="text-2xl font-bold text-white">Create Survey</h2>
             <p className="text-sm text-slate-500">
-              Build a CIP-17 survey definition with live metadata preview
+              Build a Label 17 survey definition with live metadata preview
             </p>
           </div>
         </div>

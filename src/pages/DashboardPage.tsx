@@ -52,7 +52,7 @@ export function DashboardPage() {
           <div className="flex items-center gap-2 mb-6">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold tracking-wide">
               <Sparkles className="w-3.5 h-3.5" />
-              CIP-17 Proof of Concept
+              Label 17 Proof of Concept
             </div>
             <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide ${
               mode === 'simulated'
@@ -171,18 +171,18 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* CIP-17 features section */}
+      {/* Features section */}
       <div>
         <div className="mb-5">
-          <h2 className="text-xl font-bold text-white">What CIP-17 Demonstrates</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Core specification capabilities implemented in this PoC</p>
+          <h2 className="text-xl font-bold text-white">What This Demonstrates</h2>
+          <p className="text-sm text-slate-500 mt-0.5">Core specification capabilities implemented in this proof of concept</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
             {
               icon: FileJson,
               title: 'Metadata Format',
-              desc: 'Label 17 payloads with surveyDetails and surveyResponse structures following the CIP spec',
+              desc: 'Label 17 payloads with surveyDetails and surveyResponse structures following the specification',
               color: 'text-blue-400',
               bg: 'from-blue-500/5 to-blue-500/0',
               border: 'border-blue-500/10 hover:border-blue-500/30',

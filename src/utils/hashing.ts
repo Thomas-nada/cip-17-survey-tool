@@ -1,5 +1,5 @@
 /**
- * Blake2b-256 survey hash computation per CIP-17.
+ * Blake2b-256 survey hash computation per the Label 17 specification.
  *
  * Steps:
  * 1. Build envelope {17: {"surveyDetails": <details>}} (excluding msg)
