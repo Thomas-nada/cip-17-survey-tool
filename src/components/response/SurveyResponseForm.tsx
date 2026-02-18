@@ -283,18 +283,25 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       )}
 
       {/* Submit */}
-      <button
-        type="submit"
-        disabled={!validation.valid || submitting}
-        className={`w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
-          validation.valid && !submitting
-            ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-lg shadow-teal-600/20 hover:shadow-teal-500/25 hover:-translate-y-0.5 active:translate-y-0'
-            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
-        }`}
-      >
-        <Send className="w-4 h-4" />
-        {submitting ? 'Submitting...' : 'Submit Response'}
-      </button>
+      <div className="space-y-2">
+        <button
+          type="submit"
+          disabled={!validation.valid || submitting}
+          className={`w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
+            validation.valid && !submitting
+              ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-lg shadow-teal-600/20 hover:shadow-teal-500/25 hover:-translate-y-0.5 active:translate-y-0'
+              : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
+          }`}
+        >
+          <Send className="w-4 h-4" />
+          {submitting ? 'Submitting...' : 'Submit Vote'}
+        </button>
+        {!validation.valid && selectedIndices.length === 0 && isOptionBased && (
+          <p className="text-xs text-slate-500 text-center">
+            Select {method === METHOD_SINGLE_CHOICE ? 'an option' : 'one or more options'} above to cast your vote
+          </p>
+        )}
+      </div>
     </form>
   );
 }

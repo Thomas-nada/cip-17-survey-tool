@@ -5,7 +5,7 @@ import {
   Clock,
   Hash,
   Users,
-  ChevronRight,
+  Vote,
 } from 'lucide-react';
 import {
   METHOD_SINGLE_CHOICE,
@@ -117,7 +117,11 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
               <span className="text-[10px] text-slate-500">votes</span>
             </div>
           )}
-          <ChevronRight className="w-5 h-5 text-slate-600 group-hover:text-teal-400 transition-all duration-200 group-hover:translate-x-0.5" />
+          {/* Vote CTA */}
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-teal-600 to-teal-700 group-hover:from-teal-500 group-hover:to-teal-600 text-white rounded-lg text-xs font-semibold transition-all shadow-md shadow-teal-600/20 group-hover:shadow-teal-500/30">
+            <Vote className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Vote</span>
+          </div>
         </div>
       </div>
     </button>

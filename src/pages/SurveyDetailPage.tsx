@@ -3,7 +3,7 @@ import { useState } from 'react';
 import {
   ArrowLeft,
   FileJson,
-  MessageSquare,
+  Vote,
   BarChart3,
   Copy,
   Check,
@@ -70,8 +70,8 @@ export function SurveyDetailPage() {
   const MethodIcon = METHOD_ICONS[survey.details.methodType as keyof typeof METHOD_ICONS] ?? Hash;
   const methodLabel = METHOD_LABELS[survey.details.methodType as keyof typeof METHOD_LABELS] ?? 'Custom';
 
-  const tabs: { id: Tab; label: string; icon: typeof MessageSquare }[] = [
-    { id: 'respond', label: 'Respond', icon: MessageSquare },
+  const tabs: { id: Tab; label: string; icon: typeof Vote }[] = [
+    { id: 'respond', label: 'Cast Vote', icon: Vote },
     { id: 'results', label: `Results (${responseCount})`, icon: BarChart3 },
     { id: 'metadata', label: 'Metadata', icon: FileJson },
   ];
