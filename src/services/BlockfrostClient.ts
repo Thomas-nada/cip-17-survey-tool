@@ -31,6 +31,14 @@ export interface BlockfrostAccountInfo {
   pool_id: string | null;
 }
 
+export interface BlockfrostAddressInfo {
+  address: string;
+  amount: { unit: string; quantity: string }[];
+  stake_address: string | null;
+  type: string;
+  script: boolean;
+}
+
 export class BlockfrostClient {
   private baseUrl: string;
   private projectId: string;
@@ -137,6 +145,15 @@ export class BlockfrostClient {
    */
   async getAccountInfo(stakeAddress: string): Promise<BlockfrostAccountInfo | null> {
     return this.fetchOrNull<BlockfrostAccountInfo>(`/accounts/${stakeAddress}`);
+  }
+
+  /**
+   * Get address info (including the associated stake address).
+   * Works with both bech32 and hex-encoded addresses.
+   * Returns null if the address has never been seen on-chain.
+   */
+  async getAddressInfo(address: string): Promise<BlockfrostAddressInfo | null> {
+    return this.fetchOrNull<BlockfrostAddressInfo>(`/addresses/${address}`);
   }
 
   /**
@@ -258,14 +275,15 @@ export class BlockfrostClient {
   }
 
   /**
-   * Check if a stake address is an active stakeholder (has active stake delegation).
+   * Check if a stake address is a stakeholder (holds any ADA).
+   * No delegation required — simply having ADA in your wallet qualifies.
    */
   async isStakeholder(stakeAddress: string): Promise<boolean> {
     try {
       const account = await this.getAccountInfo(stakeAddress);
       if (!account) return false;
-      // Active stake delegation means the account is registered and delegating
-      return account.active && BigInt(account.controlled_amount) > 0n;
+      // Any controlled amount > 0 means the wallet holds ADA
+      return BigInt(account.controlled_amount) > 0n;
     } catch {
       return false;
     }

@@ -156,8 +156,20 @@ function surveyReducer(state: SurveyState, action: SurveyAction): SurveyState {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeRaw] = React.useState<AppMode>('simulated');
-  const [blockfrostApiKey, setBlockfrostApiKey] = React.useState('');
+  const [mode, setModeRaw] = React.useState<AppMode>(
+    () => (localStorage.getItem('cip17_mode') as AppMode) || 'simulated'
+  );
+  const [blockfrostApiKey, setBlockfrostApiKeyRaw] = React.useState(
+    () => localStorage.getItem('cip17_blockfrost_key') || ''
+  );
+  const setBlockfrostApiKey = React.useCallback((key: string) => {
+    setBlockfrostApiKeyRaw(key);
+    if (key) {
+      localStorage.setItem('cip17_blockfrost_key', key);
+    } else {
+      localStorage.removeItem('cip17_blockfrost_key');
+    }
+  }, []);
   const [state, dispatch] = useReducer(surveyReducer, initialState);
 
   // CIP-30 wallet hook
@@ -194,6 +206,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setMode = useCallback((newMode: AppMode) => {
     setModeRaw(newMode);
+    localStorage.setItem('cip17_mode', newMode);
     if (newMode === 'simulated') {
       // Re-load seed data when switching back to simulated
       const seedResult = simulatedRef.current.seed();
@@ -262,6 +275,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
       testnetRef.current.setConnectedWallet(connectedWallet?.id ?? null);
     }
   }, [connectedWallet]);
+
+  // Fetch surveys from Blockfrost when in testnet mode with a valid API key
+  useEffect(() => {
+    if (mode !== 'testnet' || !blockfrostApiKey) return;
+
+    let cancelled = false;
+    dispatch({ type: 'SET_LOADING', payload: true });
+
+    blockchain.listSurveys().then(async (surveys) => {
+      if (cancelled) return;
+      // Also fetch responses for each survey
+      const responses = new Map<string, StoredResponse[]>();
+      for (const survey of surveys) {
+        try {
+          const resp = await blockchain.getResponses(survey.surveyTxId);
+          if (cancelled) return;
+          if (resp.length > 0) {
+            responses.set(survey.surveyTxId, resp);
+          }
+        } catch {
+          // Skip failed response fetches
+        }
+      }
+      if (!cancelled) {
+        dispatch({
+          type: 'BULK_LOAD',
+          payload: { surveys, responses },
+        });
+      }
+    }).catch((err) => {
+      if (!cancelled) {
+        console.error('Failed to fetch surveys from Blockfrost:', err);
+        dispatch({ type: 'SET_ERROR', payload: 'Failed to load surveys from Blockfrost' });
+        dispatch({ type: 'SET_LOADING', payload: false });
+      }
+    });
+
+    return () => { cancelled = true; };
+  }, [mode, blockfrostApiKey, blockchain]);
 
   const walletState = useMemo(() => ({
     availableWallets,

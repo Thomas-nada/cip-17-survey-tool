@@ -22,11 +22,15 @@ import {
 
 /**
  * Tally all valid responses for a survey.
+ *
+ * @param stakeMap - For StakeBased weighting, a map of responseCredential → lovelace (bigint).
+ *   If not provided, StakeBased falls back to weight=1 per voter.
  */
 export function tallySurveyResponses(
   survey: SurveyDetails,
   responses: StoredResponse[],
-  weighting: VoteWeighting = 'CredentialBased'
+  weighting: VoteWeighting = 'CredentialBased',
+  stakeMap?: Map<string, bigint>
 ): TallyResult {
   // 1. Sort by chain ordering (slot asc, then txIndexInBlock asc)
   const sorted = [...responses].sort((a, b) => {
@@ -57,7 +61,13 @@ export function tallySurveyResponses(
     }));
 
     for (const resp of deduplicated) {
-      const weight = weighting === 'CredentialBased' ? 1 : 1; // Simulated stake = 1
+      // CredentialBased: 1 vote per credential
+      // StakeBased: weight = ADA amount (lovelace / 1_000_000)
+      let weight = 1;
+      if (weighting === 'StakeBased' && stakeMap) {
+        const lovelace = stakeMap.get(resp.responseCredential);
+        weight = lovelace ? Number(lovelace) / 1_000_000 : 0;
+      }
       if (resp.selection) {
         for (const idx of resp.selection) {
           if (idx >= 0 && idx < tallies.length) {
@@ -123,11 +133,23 @@ export function tallySurveyResponses(
     }
   }
 
+  // Compute total weight across all deduplicated voters
+  let totalWeight = 0;
+  if (weighting === 'StakeBased' && stakeMap) {
+    for (const resp of deduplicated) {
+      const lovelace = stakeMap.get(resp.responseCredential);
+      totalWeight += lovelace ? Number(lovelace) / 1_000_000 : 0;
+    }
+  } else {
+    totalWeight = deduplicated.length; // 1 per credential
+  }
+
   return {
     surveyTxId: responses[0]?.surveyTxId ?? '',
     totalResponses: responses.length,
     uniqueCredentials: deduplicated.length,
     weighting,
+    totalWeight,
     optionTallies,
     numericTally,
   };

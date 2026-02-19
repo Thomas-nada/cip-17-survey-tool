@@ -95,6 +95,51 @@ function toCardanoMetadata(value: unknown): unknown {
   return String(value);
 }
 
+/**
+ * Reverse of toCardanoMetadata: reassemble chunked string arrays back
+ * into regular strings, and convert Maps/objects recursively.
+ * Blockfrost returns metadata as JSON objects — chunked strings appear
+ * as arrays of short strings that need to be joined.
+ */
+function fromCardanoMetadata(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'bigint') return value;
+  if (typeof value === 'boolean') return value;
+
+  if (Array.isArray(value)) {
+    // Heuristic: if every element is a string, this is likely a chunked
+    // string that was split for the 64-byte limit — rejoin it.
+    // Exception: if the original field is known to be a string[] (like
+    // options or msg), we should NOT join. We detect this by checking
+    // if any element looks like a 64-byte chunk boundary (close to 64 bytes).
+    // For safety, we only auto-join if ALL strings are ≤64 bytes and
+    // at least one is exactly 64 bytes (suggesting it was chunked).
+    const allStrings = value.every((v) => typeof v === 'string');
+    if (allStrings && value.length > 1) {
+      const encoder = new TextEncoder();
+      const hasChunkBoundary = value.some(
+        (s) => encoder.encode(s as string).length === MAX_METADATA_STRING_BYTES
+      );
+      if (hasChunkBoundary) {
+        return (value as string[]).join('');
+      }
+    }
+    // Otherwise, recurse into each element
+    return value.map(fromCardanoMetadata);
+  }
+
+  if (typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      result[k] = fromCardanoMetadata(v);
+    }
+    return result;
+  }
+
+  return value;
+}
+
 // ─── Service ────────────────────────────────────────────────────────
 
 export class TestnetBlockchain implements BlockchainService {
@@ -234,7 +279,9 @@ export class TestnetBlockchain implements BlockchainService {
           'surveyDetails' in entry.json_metadata
         ) {
           try {
-            const details = entry.json_metadata.surveyDetails as SurveyDetails;
+            // Reassemble chunked metadata strings from Blockfrost
+            const restored = fromCardanoMetadata(entry.json_metadata) as Record<string, unknown>;
+            const details = restored.surveyDetails as SurveyDetails;
             const surveyHash = computeSurveyHash(details);
             const txInfo = await this.blockfrost.getTransaction(entry.tx_hash);
 
@@ -242,12 +289,12 @@ export class TestnetBlockchain implements BlockchainService {
               surveyTxId: entry.tx_hash,
               surveyHash,
               details,
-              msg: (entry.json_metadata as Record<string, unknown>).msg as string[] | undefined,
+              msg: restored.msg as string[] | undefined,
               createdAt: txInfo.slot,
-              metadataPayload: { [METADATA_LABEL]: entry.json_metadata },
+              metadataPayload: { [METADATA_LABEL]: restored },
             });
-          } catch {
-            console.warn(`Skipping invalid survey in tx ${entry.tx_hash}`);
+          } catch (e) {
+            console.warn(`Skipping invalid survey in tx ${entry.tx_hash}`, e);
           }
         }
       }
@@ -270,7 +317,9 @@ export class TestnetBlockchain implements BlockchainService {
           typeof entry.json_metadata === 'object' &&
           'surveyResponse' in entry.json_metadata
         ) {
-          const resp = entry.json_metadata.surveyResponse as SurveyResponse;
+          // Reassemble chunked metadata strings from Blockfrost
+          const restored = fromCardanoMetadata(entry.json_metadata) as Record<string, unknown>;
+          const resp = restored.surveyResponse as SurveyResponse;
           if (resp.surveyTxId === surveyTxId) {
             try {
               const txInfo = await this.blockfrost.getTransaction(entry.tx_hash);

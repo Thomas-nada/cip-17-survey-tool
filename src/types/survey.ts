@@ -116,6 +116,8 @@ export interface TallyResult {
   totalResponses: number;
   uniqueCredentials: number;
   weighting: VoteWeighting;
+  /** Total voting weight (ADA for StakeBased, count for CredentialBased) */
+  totalWeight: number;
   optionTallies?: OptionTally[];
   numericTally?: NumericTally;
 }

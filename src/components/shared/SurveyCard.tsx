@@ -100,7 +100,7 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
               <Users className="w-3 h-3" />
               <span className="font-semibold text-slate-400">{responseCount}</span> responses
             </span>
-            {details.lifecycle && (
+            {details.lifecycle?.endEpoch != null && (
               <span className="hidden sm:flex items-center gap-1.5">
                 <Clock className="w-3 h-3" />
                 Ends epoch {details.lifecycle.endEpoch.toLocaleString()}

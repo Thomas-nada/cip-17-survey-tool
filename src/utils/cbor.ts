@@ -72,7 +72,13 @@ function surveyDetailsToMap(details: SurveyDetails): Map<string, unknown> {
   }
   if (details.lifecycle !== undefined) {
     const lc = new Map<string, unknown>();
-    lc.set('endEpoch', details.lifecycle.endEpoch);
+    // Support both new (endEpoch) and legacy (startSlot/endSlot) formats
+    const lcAny = details.lifecycle as unknown as Record<string, unknown>;
+    for (const [key, val] of Object.entries(lcAny)) {
+      if (val !== undefined) {
+        lc.set(key, val);
+      }
+    }
     m.set('lifecycle', lc);
   }
 

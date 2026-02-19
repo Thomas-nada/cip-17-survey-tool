@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   BarChart,
   Bar,
@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
-import { BarChart3, Users, Hash, TrendingUp, ChevronDown, ChevronUp, Award } from 'lucide-react';
+import { BarChart3, Users, Hash, TrendingUp, ChevronDown, ChevronUp, Award, Zap, Loader2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext.tsx';
 import { tallySurveyResponses } from '../../utils/tallying.ts';
 import {
@@ -26,20 +26,76 @@ const BAR_COLORS = [
 
 const RESPONSES_PER_PAGE = 10;
 
+/** Format a number as ADA with commas and 2 decimal places */
+function formatAda(ada: number): string {
+  return ada.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 interface Props {
   survey: StoredSurvey;
 }
 
 export function TallyDashboard({ survey }: Props) {
-  const { state } = useApp();
+  const { state, blockfrostClient, mode } = useApp();
   const responses = state.responses.get(survey.surveyTxId) ?? [];
   const weighting = survey.details.voteWeighting ?? 'CredentialBased';
+  const isStakeBased = weighting === 'StakeBased';
   const [showAllResponses, setShowAllResponses] = useState(false);
+
+  // Stake map: responseCredential → lovelace (for StakeBased weighting)
+  const [stakeMap, setStakeMap] = useState<Map<string, bigint>>(new Map());
+  const [stakesLoading, setStakesLoading] = useState(false);
+
+  // Fetch stake amounts for unique voters when StakeBased
+  useEffect(() => {
+    if (!isStakeBased || responses.length === 0 || mode !== 'testnet' || !blockfrostClient) {
+      setStakeMap(new Map());
+      return;
+    }
+
+    // Get unique credentials
+    const credentials = new Set(responses.map((r) => r.responseCredential));
+    let cancelled = false;
+    setStakesLoading(true);
+
+    (async () => {
+      const map = new Map<string, bigint>();
+      for (const cred of credentials) {
+        if (cancelled) return;
+        try {
+          // The responseCredential is the change address (hex).
+          // We need the stake address for Blockfrost lookup.
+          // For now, try using the credential directly as a stake address lookup.
+          // If it's a hex address, Blockfrost /addresses endpoint can resolve the stake address.
+          const addrInfo = await blockfrostClient.getAddressInfo(cred);
+          if (addrInfo?.stake_address) {
+            const accountInfo = await blockfrostClient.getAccountInfo(addrInfo.stake_address);
+            if (accountInfo) {
+              map.set(cred, BigInt(accountInfo.controlled_amount));
+            }
+          }
+        } catch {
+          // Skip — voter stake unknown
+        }
+      }
+      if (!cancelled) {
+        setStakeMap(map);
+        setStakesLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isStakeBased, responses, mode, blockfrostClient]);
 
   const tally = useMemo(() => {
     if (responses.length === 0) return null;
-    return tallySurveyResponses(survey.details, responses, weighting);
-  }, [survey.details, responses, weighting]);
+    return tallySurveyResponses(
+      survey.details,
+      responses,
+      weighting,
+      isStakeBased ? stakeMap : undefined
+    );
+  }, [survey.details, responses, weighting, isStakeBased, stakeMap]);
 
   if (!tally || responses.length === 0) {
     return (
@@ -64,15 +120,27 @@ export function TallyDashboard({ survey }: Props) {
     ? responses
     : responses.slice(0, RESPONSES_PER_PAGE);
 
-  // Find the leading option
+  // Find the leading option (by weight for StakeBased, by count otherwise)
   const leadingOption = isOptionBased && tally.optionTallies
-    ? tally.optionTallies.reduce((max, t) => (t.count > max.count ? t : max), tally.optionTallies[0])
+    ? tally.optionTallies.reduce((max, t) => {
+        const metric = isStakeBased ? t.weight : t.count;
+        const maxMetric = isStakeBased ? max.weight : max.count;
+        return metric > maxMetric ? t : max;
+      }, tally.optionTallies[0])
     : null;
 
   return (
     <div className="space-y-6 animate-fadeIn">
+      {/* Stakes loading indicator */}
+      {isStakeBased && stakesLoading && (
+        <div className="flex items-center gap-3 p-3 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+          <Loader2 className="w-4 h-4 text-amber-400 animate-spin flex-shrink-0" />
+          <p className="text-xs text-amber-400">Loading stake amounts for weighted results…</p>
+        </div>
+      )}
+
       {/* Stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className={`grid grid-cols-2 ${isStakeBased ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-3`}>
         <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="w-4 h-4 text-teal-400" />
@@ -95,9 +163,21 @@ export function TallyDashboard({ survey }: Props) {
             <span className="text-xs text-slate-400 font-medium">Weighting</span>
           </div>
           <p className="text-sm font-bold text-white mt-0.5">
-            {tally.weighting}
+            {isStakeBased ? 'Stake-Based' : 'Credential-Based'}
           </p>
         </div>
+        {isStakeBased && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="w-4 h-4 text-amber-400" />
+              <span className="text-xs text-slate-400 font-medium">Total Voting Power</span>
+            </div>
+            <p className="text-lg font-bold text-white font-code">
+              {formatAda(tally.totalWeight)}
+            </p>
+            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">ADA</p>
+          </div>
+        )}
         {leadingOption && (
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
@@ -125,14 +205,22 @@ export function TallyDashboard({ survey }: Props) {
       {/* Option-based chart */}
       {isOptionBased && tally.optionTallies && (
         <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-6">
-          <h4 className="text-sm font-semibold text-slate-300 mb-5 font-heading">
-            Vote Distribution
-          </h4>
+          <div className="flex items-center justify-between mb-5">
+            <h4 className="text-sm font-semibold text-slate-300 font-heading">
+              Vote Distribution
+            </h4>
+            {isStakeBased && (
+              <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                Weighted by ADA
+              </span>
+            )}
+          </div>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart
               data={tally.optionTallies.map((t) => ({
                 name: t.label,
                 votes: t.count,
+                weight: Math.round(t.weight * 100) / 100,
               }))}
               margin={{ top: 5, right: 20, left: 0, bottom: 60 }}
             >
@@ -156,26 +244,43 @@ export function TallyDashboard({ survey }: Props) {
                   fontSize: '12px',
                   padding: '8px 12px',
                 }}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                formatter={(value: any, name: any) => {
+                  const v = Number(value ?? 0);
+                  if (name === 'weight') return [`${formatAda(v)} ADA`, 'Voting Power'];
+                  return [v, 'Votes'];
+                }}
               />
-              <Bar dataKey="votes" radius={[6, 6, 0, 0]}>
-                {tally.optionTallies.map((_, index) => (
-                  <Cell
-                    key={index}
-                    fill={BAR_COLORS[index % BAR_COLORS.length]}
-                  />
-                ))}
-              </Bar>
+              {isStakeBased ? (
+                <Bar dataKey="weight" name="weight" radius={[6, 6, 0, 0]}>
+                  {tally.optionTallies.map((_, index) => (
+                    <Cell
+                      key={index}
+                      fill={BAR_COLORS[index % BAR_COLORS.length]}
+                    />
+                  ))}
+                </Bar>
+              ) : (
+                <Bar dataKey="votes" name="votes" radius={[6, 6, 0, 0]}>
+                  {tally.optionTallies.map((_, index) => (
+                    <Cell
+                      key={index}
+                      fill={BAR_COLORS[index % BAR_COLORS.length]}
+                    />
+                  ))}
+                </Bar>
+              )}
             </BarChart>
           </ResponsiveContainer>
 
           {/* Option breakdown */}
           <div className="mt-6 space-y-3">
             {tally.optionTallies.map((t, i) => {
-              const totalVotes = tally.optionTallies!.reduce(
-                (sum, x) => sum + x.count,
-                0
-              );
-              const pct = totalVotes > 0 ? (t.count / totalVotes) * 100 : 0;
+              const totalMetric = isStakeBased
+                ? tally.optionTallies!.reduce((sum, x) => sum + x.weight, 0)
+                : tally.optionTallies!.reduce((sum, x) => sum + x.count, 0);
+              const metric = isStakeBased ? t.weight : t.count;
+              const pct = totalMetric > 0 ? (metric / totalMetric) * 100 : 0;
               const isLeading = leadingOption?.label === t.label;
               return (
                 <div key={i} className={`flex items-center gap-3 p-2.5 rounded-lg transition-colors ${
@@ -191,9 +296,16 @@ export function TallyDashboard({ survey }: Props) {
                     {t.label}
                     {isLeading && <Award className="w-3 h-3 text-amber-400 inline ml-1.5" />}
                   </span>
+                  {/* Vote count */}
                   <span className="text-sm font-code text-slate-400 tabular-nums">
-                    {t.count.toLocaleString()}
+                    {t.count.toLocaleString()} {t.count === 1 ? 'vote' : 'votes'}
                   </span>
+                  {/* Voting power (StakeBased only) */}
+                  {isStakeBased && (
+                    <span className="text-xs font-code text-amber-400 tabular-nums min-w-[80px] text-right">
+                      {formatAda(t.weight)} ₳
+                    </span>
+                  )}
                   <div className="w-28 h-2 bg-slate-700/50 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
@@ -291,40 +403,56 @@ export function TallyDashboard({ survey }: Props) {
                 <th className="px-5 py-3 text-left text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
                   Value
                 </th>
+                {isStakeBased && (
+                  <th className="px-5 py-3 text-right text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
+                    Voting Power
+                  </th>
+                )}
                 <th className="px-5 py-3 text-left text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
                   Slot
                 </th>
               </tr>
             </thead>
             <tbody>
-              {displayedResponses.map((resp) => (
-                <tr
-                  key={resp.txId}
-                  className="border-b border-slate-800/30 hover:bg-slate-800/20 transition-colors"
-                >
-                  <td className="px-5 py-3 font-code text-xs text-slate-400">
-                    {resp.responseCredential.slice(0, 16)}...
-                  </td>
-                  <td className="px-5 py-3 text-slate-300 text-xs">
-                    {resp.selection !== undefined && (
-                      <span>
-                        {resp.selection
-                          .map(
-                            (i) =>
-                              survey.details.options?.[i] ?? `[${i}]`
-                          )
-                          .join(', ')}
-                      </span>
+              {displayedResponses.map((resp) => {
+                const voterLovelace = stakeMap.get(resp.responseCredential);
+                return (
+                  <tr
+                    key={resp.txId}
+                    className="border-b border-slate-800/30 hover:bg-slate-800/20 transition-colors"
+                  >
+                    <td className="px-5 py-3 font-code text-xs text-slate-400">
+                      {resp.responseCredential.slice(0, 16)}...
+                    </td>
+                    <td className="px-5 py-3 text-slate-300 text-xs">
+                      {resp.selection !== undefined && (
+                        <span>
+                          {resp.selection
+                            .map(
+                              (i) =>
+                                survey.details.options?.[i] ?? `[${i}]`
+                            )
+                            .join(', ')}
+                        </span>
+                      )}
+                      {resp.numericValue !== undefined && (
+                        <span className="font-code font-semibold">{resp.numericValue.toLocaleString()}</span>
+                      )}
+                    </td>
+                    {isStakeBased && (
+                      <td className="px-5 py-3 text-right font-code text-xs text-amber-400">
+                        {voterLovelace
+                          ? `${formatAda(Number(voterLovelace) / 1_000_000)} ₳`
+                          : <span className="text-slate-600">—</span>
+                        }
+                      </td>
                     )}
-                    {resp.numericValue !== undefined && (
-                      <span className="font-code font-semibold">{resp.numericValue.toLocaleString()}</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 font-code text-xs text-slate-500">
-                    {resp.slot.toLocaleString()}
-                  </td>
-                </tr>
-              ))}
+                    <td className="px-5 py-3 font-code text-xs text-slate-500">
+                      {resp.slot.toLocaleString()}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

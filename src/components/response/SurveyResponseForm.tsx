@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Send, AlertCircle, CheckCircle2, ChevronDown, Wallet, ShieldCheck, ShieldX, Loader2, RefreshCw } from 'lucide-react';
+import { Send, AlertCircle, CheckCircle2, ChevronDown, Wallet, ShieldCheck, ShieldX, Loader2, RefreshCw, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../../context/AppContext.tsx';
 import { useEligibility } from '../../hooks/useEligibility.ts';
@@ -22,8 +22,14 @@ const ROLE_LABELS: Record<EligibilityRole, string> = {
   DRep: 'Delegated Representative',
   SPO: 'Stake Pool Operator',
   CC: 'Constitutional Committee',
-  Stakeholder: 'Stakeholder',
+  Stakeholder: 'ADA Holder',
 };
+
+/** Format lovelace (bigint) to a human-readable ADA string */
+function formatAda(lovelace: bigint): string {
+  const ada = Number(lovelace) / 1_000_000;
+  return ada.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   const { blockchain, dispatch, mode, wallet } = useApp();
@@ -406,6 +412,27 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
                 </span>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Voting power display */}
+      {mode === 'testnet' && wallet.connectedWallet && !eligibility.checking && eligibility.votingPowerLovelace !== null && (
+        <div className="flex items-center gap-3 p-4 bg-slate-800/30 border border-slate-700/30 rounded-xl animate-fadeIn">
+          <Zap className="w-5 h-5 text-amber-400 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-slate-300">Your Voting Power</p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {details.voteWeighting === 'StakeBased'
+                ? 'This survey uses stake-based weighting — your vote weight scales with your ADA'
+                : 'This survey uses credential-based weighting — 1 vote per wallet'}
+            </p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className="text-lg font-bold text-white font-code">
+              {formatAda(eligibility.votingPowerLovelace)}
+            </p>
+            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">ADA</p>
           </div>
         </div>
       )}
