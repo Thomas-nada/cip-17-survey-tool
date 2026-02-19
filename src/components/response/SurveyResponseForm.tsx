@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { Send, AlertCircle, CheckCircle2, ChevronDown, Wallet } from 'lucide-react';
+import { Send, AlertCircle, CheckCircle2, ChevronDown, Wallet, ShieldCheck, ShieldX, Loader2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../../context/AppContext.tsx';
+import { useEligibility } from '../../hooks/useEligibility.ts';
 import { validateSurveyResponse } from '../../utils/validation.ts';
 import { SPEC_VERSION } from '../../constants/methodTypes.ts';
 import {
@@ -9,16 +10,28 @@ import {
   METHOD_MULTI_SELECT,
   METHOD_NUMERIC_RANGE,
 } from '../../types/survey.ts';
-import type { StoredSurvey, SurveyResponse } from '../../types/survey.ts';
+import type { StoredSurvey, SurveyResponse, EligibilityRole } from '../../types/survey.ts';
 
 interface Props {
   survey: StoredSurvey;
   onSubmitted?: () => void;
 }
 
+// Human-readable role labels
+const ROLE_LABELS: Record<EligibilityRole, string> = {
+  DRep: 'Delegated Representative',
+  SPO: 'Stake Pool Operator',
+  CC: 'Constitutional Committee',
+  Stakeholder: 'Stakeholder',
+};
+
 export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   const { blockchain, dispatch, mode, wallet } = useApp();
   const { details } = survey;
+
+  // Eligibility check
+  const eligibility = useEligibility(details.eligibility);
+  const hasEligibilityRestrictions = details.eligibility && details.eligibility.length > 0;
 
   // Response state
   const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
@@ -289,26 +302,141 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
           <div className="flex-1">
             <p className="text-sm font-medium text-amber-300">Wallet not connected</p>
             <p className="text-xs text-amber-400/70 mt-0.5">
-              Connect a CIP-30 wallet to submit your vote on-chain. Click "Connect Wallet" in the header.
+              Connect a CIP-30 wallet to submit your vote on-chain. Click &quot;Connect Wallet&quot; in the header.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Eligibility status */}
+      {hasEligibilityRestrictions && mode === 'testnet' && wallet.connectedWallet && (
+        <div className="animate-fadeIn">
+          {/* Checking state */}
+          {eligibility.checking && (
+            <div className="flex items-center gap-3 p-4 bg-slate-800/40 border border-slate-700/30 rounded-xl">
+              <Loader2 className="w-5 h-5 text-teal-400 flex-shrink-0 animate-spin" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-slate-300">Checking eligibility…</p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Verifying your on-chain roles via Blockfrost
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Eligible */}
+          {!eligibility.checking && eligibility.eligible && (
+            <div className="flex items-center gap-3 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-emerald-300">Eligible to vote</p>
+                <p className="text-xs text-emerald-400/70 mt-0.5">
+                  Your wallet holds the required role{eligibility.walletRoles.length > 1 ? 's' : ''}:{' '}
+                  {eligibility.walletRoles.map((r) => ROLE_LABELS[r]).join(', ')}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Not eligible */}
+          {!eligibility.checking && !eligibility.eligible && !eligibility.error && (
+            <div className="flex items-center gap-3 p-4 bg-red-500/5 border border-red-500/20 rounded-xl">
+              <ShieldX className="w-5 h-5 text-red-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-300">Not eligible to vote</p>
+                <p className="text-xs text-red-400/70 mt-1">
+                  This survey requires one of:{' '}
+                  {details.eligibility!.map((r) => ROLE_LABELS[r]).join(', ')}
+                </p>
+                {eligibility.missingRoles.length > 0 && (
+                  <p className="text-xs text-red-400/50 mt-0.5">
+                    Missing: {eligibility.missingRoles.map((r) => ROLE_LABELS[r]).join(', ')}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={eligibility.recheck}
+                className="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors"
+                title="Re-check eligibility"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Error state */}
+          {!eligibility.checking && eligibility.error && (
+            <div className="flex items-center gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+              <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-amber-300">Eligibility check failed</p>
+                <p className="text-xs text-amber-400/70 mt-0.5">{eligibility.error}</p>
+              </div>
+              <button
+                type="button"
+                onClick={eligibility.recheck}
+                className="p-2 text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition-colors"
+                title="Retry eligibility check"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Required roles badge row */}
+          <div className="flex flex-wrap gap-2 mt-3">
+            {details.eligibility!.map((role) => {
+              const held = eligibility.walletRoles.includes(role);
+              return (
+                <span
+                  key={role}
+                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${
+                    held
+                      ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                      : 'text-slate-500 bg-slate-800/30 border-slate-700/30'
+                  }`}
+                >
+                  {held ? (
+                    <CheckCircle2 className="w-3 h-3" />
+                  ) : (
+                    <ShieldX className="w-3 h-3" />
+                  )}
+                  {ROLE_LABELS[role]}
+                </span>
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Submit */}
       <div className="space-y-2">
-        <button
-          type="submit"
-          disabled={!validation.valid || submitting || (mode === 'testnet' && !wallet.connectedWallet)}
-          className={`w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
-            validation.valid && !submitting && !(mode === 'testnet' && !wallet.connectedWallet)
-              ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-lg shadow-teal-600/20 hover:shadow-teal-500/25 hover:-translate-y-0.5 active:translate-y-0'
-              : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
-          }`}
-        >
-          <Send className="w-4 h-4" />
-          {submitting ? 'Submitting...' : 'Submit Vote'}
-        </button>
+        {(() => {
+          const walletBlocked = mode === 'testnet' && !wallet.connectedWallet;
+          const eligibilityBlocked = mode === 'testnet' && hasEligibilityRestrictions && !eligibility.eligible;
+          const eligibilityChecking = mode === 'testnet' && hasEligibilityRestrictions && eligibility.checking;
+          const isDisabled = !validation.valid || submitting || walletBlocked || eligibilityBlocked || eligibilityChecking;
+          return (
+            <button
+              type="submit"
+              disabled={isDisabled}
+              className={`w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
+                !isDisabled
+                  ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white shadow-lg shadow-teal-600/20 hover:shadow-teal-500/25 hover:-translate-y-0.5 active:translate-y-0'
+                  : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700/50'
+              }`}
+            >
+              {eligibilityChecking ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              {submitting ? 'Submitting...' : eligibilityChecking ? 'Checking eligibility...' : eligibilityBlocked ? 'Not eligible to vote' : 'Submit Vote'}
+            </button>
+          );
+        })()}
+
         {!validation.valid && selectedIndices.length === 0 && isOptionBased && (
           <p className="text-xs text-slate-500 text-center">
             Select {method === METHOD_SINGLE_CHOICE ? 'an option' : 'one or more options'} above to cast your vote

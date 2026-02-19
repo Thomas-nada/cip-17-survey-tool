@@ -59,6 +59,8 @@ interface AppContextValue {
   mode: AppMode;
   setMode: (mode: AppMode) => void;
   blockchain: BlockchainService;
+  /** BlockfrostClient instance (available when in testnet mode) */
+  blockfrostClient: BlockfrostClient | null;
   state: SurveyState;
   dispatch: React.Dispatch<SurveyAction>;
   blockfrostApiKey: string;
@@ -231,14 +233,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [walletDisconnect]);
 
+  // Keep a ref to the BlockfrostClient for eligibility checks
+  const blockfrostClientRef = useRef<BlockfrostClient | null>(null);
+
   const blockchain = useMemo<BlockchainService>(() => {
     if (mode === 'simulated') {
+      blockfrostClientRef.current = null;
       return simulatedRef.current;
     } else {
       const client = new BlockfrostClient(
         blockfrostApiKey || 'your-project-id',
         'preview'
       );
+      blockfrostClientRef.current = client;
       const testnet = new TestnetBlockchain(client, () => null);
       testnetRef.current = testnet;
       // If wallet is already connected, set its name
@@ -277,6 +284,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       mode,
       setMode,
       blockchain,
+      blockfrostClient: blockfrostClientRef.current,
       state,
       dispatch,
       blockfrostApiKey,
