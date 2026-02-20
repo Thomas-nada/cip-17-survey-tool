@@ -1,14 +1,32 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Header } from './Header.tsx';
 import { Toaster } from 'react-hot-toast';
 import { useApp } from '../../context/AppContext.tsx';
 import { useI18n } from '../../context/I18nContext.tsx';
 
+const LOADING_LINES = [
+  'Booting Label 17 governance matrix...',
+  'Indexing on-chain survey packets...',
+  'Negotiating with highly opinionated stake blobs...',
+  'Calibrating tally lasers to deterministic mode...',
+  'Compiling civic wisdom into verifiable metadata...',
+];
+
 export function PageLayout({ children }: { children: ReactNode }) {
   const { state } = useApp();
   const { t } = useI18n();
   const [showErrorDetails, setShowErrorDetails] = useState(false);
+  const [loadingLineIndex, setLoadingLineIndex] = useState(0);
+  const showSurveyLoader = state.loading && state.surveys.length === 0;
+
+  useEffect(() => {
+    if (!showSurveyLoader) return;
+    const interval = window.setInterval(() => {
+      setLoadingLineIndex((i) => (i + 1) % LOADING_LINES.length);
+    }, 1400);
+    return () => window.clearInterval(interval);
+  }, [showSurveyLoader]);
 
   return (
     <div className="accent-stripe min-h-screen bg-transparent text-white">
@@ -40,6 +58,26 @@ export function PageLayout({ children }: { children: ReactNode }) {
       />
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {showSurveyLoader && (
+          <div className="mb-6 rounded-2xl border border-teal-500/25 bg-slate-900/50 p-6 md:p-8 animate-fadeIn">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-teal-300">
+              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-teal-400" />
+              Syncing Chain State
+            </div>
+            <h2 className="mt-4 font-heading text-xl md:text-2xl text-white">
+              Label 17 Cold Start Sequence
+            </h2>
+            <p className="mt-2 text-sm text-slate-300 font-code min-h-[1.4rem]">
+              {LOADING_LINES[loadingLineIndex]}
+            </p>
+            <div className="mt-5 h-2 w-full overflow-hidden rounded-md border border-slate-700/60 bg-slate-800/80">
+              <div className="h-full w-1/3 animate-pulse bg-gradient-to-r from-teal-500 via-cyan-400 to-violet-500" />
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Pulling surveys and responses from index cache. This usually takes a few seconds.
+            </p>
+          </div>
+        )}
         {state.error && (
           <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
             <p className="text-sm text-amber-200 font-medium">{t('layout.errorLoading')}</p>
