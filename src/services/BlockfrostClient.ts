@@ -59,7 +59,7 @@ export class BlockfrostClient {
   private apiBase: string;
   private baseUrl: string;
   private network: 'testnet' | 'mainnet';
-  private ttlMs = 30_000;
+  private ttlMs = Number(import.meta.env.VITE_BLOCKFROST_CACHE_TTL_MS || 300_000);
   private cache = {
     account: new Map<string, { at: number; value: BlockfrostAccountInfo | null }>(),
     address: new Map<string, { at: number; value: BlockfrostAddressInfo | null }>(),
@@ -73,6 +73,7 @@ export class BlockfrostClient {
     ccByHash: new Map<string, { at: number; value: boolean }>(),
     isStakeholder: new Map<string, { at: number; value: boolean }>(),
   };
+  private storagePrefix = 'cip17_bf_cache';
 
   constructor(projectId: string, network: 'preview' | 'mainnet' = 'preview') {
     void projectId; // keys are resolved server-side by the backend proxy
@@ -84,6 +85,7 @@ export class BlockfrostClient {
         : '/api';
     this.apiBase = (configuredBase || pagesFallback).replace(/\/+$/, '');
     this.baseUrl = `${this.apiBase}/blockfrost`;
+    this.restoreCacheFromStorage();
   }
 
   private networkHeader(): Record<string, string> {
@@ -95,6 +97,7 @@ export class BlockfrostClient {
     if (!hit) return undefined;
     if (Date.now() - hit.at > this.ttlMs) {
       map.delete(key);
+      this.persistSingleCacheMap(map);
       return undefined;
     }
     return hit.value;
@@ -102,7 +105,91 @@ export class BlockfrostClient {
 
   private writeCache<T>(map: Map<string, { at: number; value: T }>, key: string, value: T): T {
     map.set(key, { at: Date.now(), value });
+    this.persistSingleCacheMap(map);
     return value;
+  }
+
+  private getCacheName(
+    target: Map<string, { at: number; value: unknown }>
+  ): keyof BlockfrostClient['cache'] | null {
+    const entries = Object.entries(this.cache) as Array<
+      [keyof BlockfrostClient['cache'], Map<string, { at: number; value: unknown }>]
+    >;
+    for (const [name, map] of entries) {
+      if (map === target) return name;
+    }
+    return null;
+  }
+
+  private storageKey(name: keyof BlockfrostClient['cache']): string {
+    return `${this.storagePrefix}:${this.network}:${String(name)}`;
+  }
+
+  private cacheReplacer(_key: string, value: unknown): unknown {
+    if (typeof value === 'bigint') {
+      return `__bf_bigint:${value.toString()}`;
+    }
+    return value;
+  }
+
+  private cacheReviver(_key: string, value: unknown): unknown {
+    if (typeof value === 'string' && value.startsWith('__bf_bigint:')) {
+      try {
+        return BigInt(value.slice('__bf_bigint:'.length));
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  }
+
+  private persistSingleCacheMap(
+    map: Map<string, { at: number; value: unknown }>
+  ): void {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const name = this.getCacheName(map);
+    if (!name) return;
+    try {
+      const payload: Record<string, { at: number; value: unknown }> = {};
+      for (const [key, entry] of map.entries()) {
+        payload[key] = { at: entry.at, value: entry.value };
+      }
+      window.localStorage.setItem(
+        this.storageKey(name),
+        JSON.stringify(payload, this.cacheReplacer)
+      );
+    } catch {
+      // Best-effort cache persistence only.
+    }
+  }
+
+  private restoreCacheFromStorage(): void {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const now = Date.now();
+    const entries = Object.entries(this.cache) as Array<
+      [keyof BlockfrostClient['cache'], Map<string, { at: number; value: unknown }>]
+    >;
+
+    for (const [name, map] of entries) {
+      try {
+        const raw = window.localStorage.getItem(this.storageKey(name));
+        if (!raw) continue;
+        const parsed = JSON.parse(raw, this.cacheReviver) as Record<
+          string,
+          { at: number; value: unknown }
+        >;
+        if (!parsed || typeof parsed !== 'object') continue;
+
+        map.clear();
+        for (const [key, entry] of Object.entries(parsed)) {
+          if (!entry || typeof entry.at !== 'number') continue;
+          if (now - entry.at > this.ttlMs) continue;
+          map.set(key, { at: entry.at, value: entry.value });
+        }
+      } catch {
+        // Ignore malformed cache payloads.
+      }
+    }
   }
 
   private async fetch<T>(path: string, init?: RequestInit): Promise<T> {
