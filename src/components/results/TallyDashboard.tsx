@@ -1027,12 +1027,17 @@ export function TallyDashboard({ survey }: Props) {
             </thead>
             <tbody>
               {displayedResponses.map((resp) => {
+                const voterKey = resp.voterAddress ?? resp.responseCredential;
+                const unverified = resp.identityVerified === false;
+                const superseded = latestCountedByVoter.get(voterKey) !== resp.txId;
+                const isCounted = !unverified && !superseded;
                 const voterLovelace = stakeMap.get(resp.txId)
                   ?? stakeMap.get(resp.responseCredential)
                   ?? (resp.voterAddress ? stakeMap.get(resp.voterAddress) : undefined);
                 const role = resolvedRoleByCredential.get(resp.responseCredential);
                 const ccCold = resolvedCcColdByCredential.get(resp.responseCredential);
                 const spoPool = resolvedSpoPoolByCredential.get(resp.responseCredential);
+                const claimedCredential = (resp.claimedCredential ?? '').trim();
                 const derivedStake =
                   deriveStakeFromAddress(resp.responseCredential) ??
                   deriveStakeFromAddress(resp.voterAddress ?? '') ??
@@ -1040,8 +1045,13 @@ export function TallyDashboard({ survey }: Props) {
                 const addrDisplay =
                   (resp.voterAddress?.startsWith('addr') ? resp.voterAddress : null) ??
                   (resp.responseCredential.startsWith('addr') ? resp.responseCredential : null);
+                const unverifiedClaimedPool = !isCounted && claimedCredential.startsWith('pool')
+                  ? claimedCredential
+                  : null;
                 const cred = role === 'SPO' || role === 'CC'
-                  ? (role === 'CC' ? (ccCold ?? derivedStake ?? resp.responseCredential) : (spoPool ?? derivedStake ?? resp.responseCredential))
+                  ? (role === 'CC'
+                      ? (ccCold ?? derivedStake ?? resp.responseCredential)
+                      : (unverifiedClaimedPool ?? spoPool ?? derivedStake ?? resp.responseCredential))
                   : role === 'DRep'
                     ? resp.responseCredential
                     : (addrDisplay ?? resp.responseCredential);
@@ -1058,10 +1068,6 @@ export function TallyDashboard({ survey }: Props) {
                   : !isCcCold
                     ? `${explorerBase}/address/${cred}`
                     : '';
-                const voterKey = resp.voterAddress ?? resp.responseCredential;
-                const unverified = resp.identityVerified === false;
-                const superseded = latestCountedByVoter.get(voterKey) !== resp.txId;
-                const isCounted = !unverified && !superseded;
                 const txPower = stakeMap.get(resp.txId);
                 const credPower = stakeMap.get(resp.responseCredential);
                 const voterPower = resp.voterAddress ? stakeMap.get(resp.voterAddress) : undefined;
