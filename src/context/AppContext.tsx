@@ -91,6 +91,74 @@ const initialState: SurveyState = {
   error: null,
 };
 
+const APP_CACHE_TTL_MS = Number(import.meta.env.VITE_APP_CACHE_TTL_MS || 300_000);
+const APP_CACHE_VERSION = 1;
+
+type CachedSurveyState = {
+  version: number;
+  mode: AppMode;
+  savedAt: number;
+  surveys: StoredSurvey[];
+  responses: Array<[string, StoredResponse[]]>;
+};
+
+function cacheKey(mode: AppMode): string {
+  return `cip17_app_state_${mode}`;
+}
+
+function loadCachedState(mode: AppMode): SurveyState {
+  if (typeof window === 'undefined' || !window.localStorage) return { ...initialState, responses: new Map(), tallies: new Map() };
+  try {
+    const raw = window.localStorage.getItem(cacheKey(mode));
+    if (!raw) return { ...initialState, responses: new Map(), tallies: new Map() };
+    const parsed = JSON.parse(raw) as CachedSurveyState;
+    if (!parsed || parsed.version !== APP_CACHE_VERSION || parsed.mode !== mode) {
+      return { ...initialState, responses: new Map(), tallies: new Map() };
+    }
+    if (Date.now() - parsed.savedAt > APP_CACHE_TTL_MS) {
+      return { ...initialState, responses: new Map(), tallies: new Map() };
+    }
+    return {
+      surveys: Array.isArray(parsed.surveys) ? parsed.surveys : [],
+      responses: new Map(Array.isArray(parsed.responses) ? parsed.responses : []),
+      tallies: new Map(),
+      loading: false,
+      error: null,
+    };
+  } catch {
+    return { ...initialState, responses: new Map(), tallies: new Map() };
+  }
+}
+
+function persistState(mode: AppMode, state: SurveyState): void {
+  if (typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    const payload: CachedSurveyState = {
+      version: APP_CACHE_VERSION,
+      mode,
+      savedAt: Date.now(),
+      surveys: state.surveys,
+      responses: Array.from(state.responses.entries()),
+    };
+    window.localStorage.setItem(cacheKey(mode), JSON.stringify(payload));
+  } catch {
+    // Best-effort persistence only.
+  }
+}
+
+function hasFreshCache(mode: AppMode): boolean {
+  if (typeof window === 'undefined' || !window.localStorage) return false;
+  try {
+    const raw = window.localStorage.getItem(cacheKey(mode));
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as CachedSurveyState;
+    if (!parsed || parsed.version !== APP_CACHE_VERSION || parsed.mode !== mode) return false;
+    return Date.now() - parsed.savedAt <= APP_CACHE_TTL_MS;
+  } catch {
+    return false;
+  }
+}
+
 function surveyReducer(state: SurveyState, action: SurveyAction): SurveyState {
   switch (action.type) {
     case 'SURVEY_CREATED':
@@ -173,16 +241,17 @@ function surveyReducer(state: SurveyState, action: SurveyAction): SurveyState {
 const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeRaw] = React.useState<AppMode>(
-    () => (localStorage.getItem('cip17_mode') as AppMode) || 'mainnet'
-  );
+  const [mode, setModeRaw] = React.useState<AppMode>(() => {
+    if (typeof window === 'undefined' || !window.localStorage) return 'mainnet';
+    return (window.localStorage.getItem('cip17_mode') as AppMode) || 'mainnet';
+  });
   const [backendHealth, setBackendHealth] = React.useState({
     ok: false,
     mainnetKey: false,
     testnetKey: false,
     checkedAt: null as number | null,
   });
-  const [state, dispatch] = useReducer(surveyReducer, initialState);
+  const [state, dispatch] = useReducer(surveyReducer, mode, loadCachedState);
 
   // CIP-30 wallet hook
   const {
@@ -203,7 +272,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setMode = useCallback((newMode: AppMode) => {
     setModeRaw(newMode);
     localStorage.setItem('cip17_mode', newMode);
-    dispatch({ type: 'CLEAR_STATE' });
+    const cached = loadCachedState(newMode);
+    dispatch({
+      type: 'BULK_LOAD',
+      payload: { surveys: cached.surveys, responses: cached.responses },
+    });
   }, []);
 
   const connect = useCallback(async (walletId: string) => {
@@ -280,7 +353,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Fetch surveys from backend index
   useEffect(() => {
     let cancelled = false;
-    dispatch({ type: 'SET_LOADING', payload: true });
+    const freshCache = hasFreshCache(mode);
+    if (!freshCache) {
+      dispatch({ type: 'SET_LOADING', payload: true });
+    }
+
+    if (freshCache) {
+      return () => { cancelled = true; };
+    }
 
     blockchain.listSurveys().then(async (surveys) => {
       if (cancelled) return;
@@ -312,7 +392,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     return () => { cancelled = true; };
-  }, [blockchain]);
+  }, [blockchain, mode]);
+
+  // Persist surveys/responses for fast reloads.
+  useEffect(() => {
+    persistState(mode, state);
+  }, [mode, state.surveys, state.responses]);
 
   const walletState = useMemo(() => ({
     availableWallets,

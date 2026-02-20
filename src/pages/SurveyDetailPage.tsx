@@ -13,6 +13,7 @@ import {
   Users,
   Hash,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.tsx';
 import { SurveyResponseForm } from '../components/response/SurveyResponseForm.tsx';
@@ -45,6 +46,7 @@ export function SurveyDetailPage() {
 
   const survey = state.surveys.find((s) => s.surveyTxId === surveyTxId);
   const isOnChainMode = mode === 'mainnet' || mode === 'testnet';
+  const isHydratingSurvey = !survey && state.loading;
 
   const copyHash = async () => {
     if (!survey) return;
@@ -80,6 +82,18 @@ export function SurveyDetailPage() {
     }, 12000);
     return () => window.clearInterval(interval);
   }, [activeTab, watchMode, isOnChainMode, refreshResponses]);
+
+  if (isHydratingSurvey) {
+    return (
+      <div className="text-center py-20 animate-fadeIn">
+        <div className="inline-flex p-4 bg-slate-800/50 rounded-2xl mb-4">
+          <Loader2 className="w-10 h-10 text-teal-400 animate-spin" />
+        </div>
+        <p className="text-slate-300 font-medium mb-1">{t('common.loading')}</p>
+        <p className="text-sm text-slate-500 mb-6">{t('detail.loadingSurveyFromChain')}</p>
+      </div>
+    );
+  }
 
   if (!survey) {
     return (
