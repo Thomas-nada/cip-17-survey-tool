@@ -77,7 +77,12 @@ export class BlockfrostClient {
   constructor(projectId: string, network: 'preview' | 'mainnet' = 'preview') {
     void projectId; // keys are resolved server-side by the backend proxy
     this.network = network === 'mainnet' ? 'mainnet' : 'testnet';
-    this.apiBase = (import.meta.env.VITE_BACKEND_API_BASE || '/api').replace(/\/+$/, '');
+    const configuredBase = (import.meta.env.VITE_BACKEND_API_BASE as string | undefined)?.trim();
+    const pagesFallback =
+      typeof window !== 'undefined' && window.location.hostname.endsWith('.pages.dev')
+        ? 'https://cip-17-survey-tool.onrender.com/api'
+        : '/api';
+    this.apiBase = (configuredBase || pagesFallback).replace(/\/+$/, '');
     this.baseUrl = `${this.apiBase}/blockfrost`;
   }
 
