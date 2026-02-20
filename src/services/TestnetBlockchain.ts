@@ -582,16 +582,10 @@ export class TestnetBlockchain implements BlockchainService {
 
     if (allowsStakeholder) {
       // Stakeholder and unrestricted surveys use signer payment address as canonical identity.
-      // If a claim is provided, require exact addr... match to prevent spoofed claims.
+      // If addr... claim is provided, require exact signer match to prevent spoofing.
+      // Non-addr claims (e.g., legacy drep... metadata) are ignored in this path.
       if (claimed) {
-        if (!claimed.startsWith('addr')) {
-          return {
-            canonicalCredential: canonicalSignerCredential,
-            verified: false,
-            reason: 'Stakeholder claim must be an addr credential',
-          };
-        }
-        if (claimed !== voterAddress) {
+        if (claimed.startsWith('addr') && claimed !== voterAddress) {
           return {
             canonicalCredential: canonicalSignerCredential,
             verified: false,
@@ -748,9 +742,10 @@ export class TestnetBlockchain implements BlockchainService {
   ): Promise<SubmitResponseResult> {
     const wallet = await this.getWallet([{ cip: 95 }]);
     const fallbackCredential = await wallet.getChangeAddress();
-    const drepCredential = await this.resolveActiveDRepCredential(wallet);
     const providedCredential = this.normalizeCredential(response.responseCredential);
-    const responseCredential = providedCredential ?? drepCredential ?? fallbackCredential;
+    // Keep signer payment address as the default identity unless caller explicitly
+    // provides a role-specific credential (e.g., DRep/CC/SPO flow).
+    const responseCredential = providedCredential ?? fallbackCredential;
 
     const innerPayload: Record<string, unknown> = {
       ...(msg && msg.length > 0 ? { msg } : {}),

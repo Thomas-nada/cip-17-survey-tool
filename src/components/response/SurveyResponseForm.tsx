@@ -130,9 +130,20 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
 
   const effectiveCredential = useMemo(() => {
     if (cliMode && (!wallet.connectedWallet || forceCliOnlySurvey)) return cliCredential.trim();
-    if (eligibility.drepId && eligibility.walletRoles.includes('DRep')) return eligibility.drepId;
+    const prefersDRepCredential = requiredRoles.includes('DRep');
+    if (prefersDRepCredential && eligibility.drepId && eligibility.walletRoles.includes('DRep')) {
+      return eligibility.drepId;
+    }
     return undefined;
-  }, [cliMode, cliCredential, wallet.connectedWallet, forceCliOnlySurvey, eligibility.drepId, eligibility.walletRoles]);
+  }, [
+    cliMode,
+    cliCredential,
+    wallet.connectedWallet,
+    forceCliOnlySurvey,
+    eligibility.drepId,
+    eligibility.walletRoles,
+    requiredRoles,
+  ]);
   const cliProofRole = useMemo(() => {
     const credential = (effectiveCredential ?? '').trim();
     if (!cliMode || !credential) return null;
