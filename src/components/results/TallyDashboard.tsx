@@ -508,6 +508,13 @@ export function TallyDashboard({ survey }: Props) {
 
           if (!stakeAddress) continue;
 
+          if (shouldCheckSPO) {
+            const accountInfo = await blockfrostClient.getAccountInfo(stakeAddress);
+            if (accountInfo?.pool_id) {
+              spoPoolMap.set(credential, accountInfo.pool_id);
+            }
+          }
+
           if (shouldCheckCC && await blockfrostClient.isCCMember(stakeAddress)) {
             roleMap.set(credential, 'CC');
             const ccCold = deriveCcColdFromStakeAddress(stakeAddress);
@@ -516,10 +523,6 @@ export function TallyDashboard({ survey }: Props) {
           }
           if (shouldCheckSPO && await blockfrostClient.isSPO(stakeAddress)) {
             roleMap.set(credential, 'SPO');
-            const accountInfo = await blockfrostClient.getAccountInfo(stakeAddress);
-            if (accountInfo?.pool_id) {
-              spoPoolMap.set(credential, accountInfo.pool_id);
-            }
             continue;
           }
           if (shouldCheckStakeholder && await blockfrostClient.isStakeholder(stakeAddress)) {
@@ -1027,6 +1030,7 @@ export function TallyDashboard({ survey }: Props) {
             </thead>
             <tbody>
               {displayedResponses.map((resp) => {
+                const hasSpoEligibility = (survey.details.eligibility ?? []).includes('SPO');
                 const voterKey = resp.voterAddress ?? resp.responseCredential;
                 const unverified = resp.identityVerified === false;
                 const superseded = latestCountedByVoter.get(voterKey) !== resp.txId;
@@ -1051,6 +1055,8 @@ export function TallyDashboard({ survey }: Props) {
                   : null;
                 const cred = claimedPool
                   ? claimedPool
+                  : hasSpoEligibility && spoPool
+                    ? spoPool
                   : role === 'SPO' || role === 'CC'
                     ? (role === 'CC'
                         ? (ccCold ?? derivedStake ?? resp.responseCredential)
