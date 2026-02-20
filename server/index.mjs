@@ -8,6 +8,7 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 8787);
 const INDEX_TTL_MS = Number(process.env.INDEX_TTL_MS || 30_000);
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 const NETWORKS = {
   mainnet: {
@@ -25,6 +26,25 @@ const indexCache = {
   mainnet: { at: 0, surveys: [], responsesBySurvey: new Map() },
   testnet: { at: 0, surveys: [], responsesBySurvey: new Map() },
 };
+
+function applyCors(req, res, next) {
+  const origin = req.headers.origin;
+  if (CORS_ORIGIN === '*') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  } else if (origin && origin === CORS_ORIGIN) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-network');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+}
+
+app.use(applyCors);
 
 function normalizeNetwork(value) {
   return value === 'mainnet' ? 'mainnet' : 'testnet';

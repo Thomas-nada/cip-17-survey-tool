@@ -19,6 +19,47 @@ The backend reads keys from `.env` and the browser app talks to the backend prox
 
 Default backend URL is `http://localhost:8787` (proxied in Vite as `/api`).
 
+## Deploy (Free): Render + Cloudflare Pages
+
+### 1) Backend on Render
+
+- Create a **Web Service** from this repo.
+- Root directory: `cip17-survey-poc`
+- Build command: `npm install`
+- Start command: `npm run server`
+- Environment variables:
+
+```bash
+BLOCKFROST_MAINNET_PROJECT_ID=...
+BLOCKFROST_TESTNET_PROJECT_ID=...
+INDEX_TTL_MS=30000
+CORS_ORIGIN=https://<your-pages-domain>.pages.dev
+```
+
+After deploy, verify:
+
+```bash
+https://<your-render-service>.onrender.com/api/health
+```
+
+### 2) Frontend on Cloudflare Pages
+
+- Framework: `Vite`
+- Root directory: `cip17-survey-poc`
+- Build command: `npm run build`
+- Build output: `dist`
+- Environment variables:
+
+```bash
+VITE_BACKEND_API_BASE=https://<your-render-service>.onrender.com/api
+GITHUB_PAGES=false
+```
+
+### 3) Notes
+
+- Do not expose Blockfrost keys in frontend env vars.
+- Frontend must call backend API via `VITE_BACKEND_API_BASE`.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
