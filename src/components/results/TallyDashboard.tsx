@@ -1038,6 +1038,7 @@ export function TallyDashboard({ survey }: Props) {
                 const ccCold = resolvedCcColdByCredential.get(resp.responseCredential);
                 const spoPool = resolvedSpoPoolByCredential.get(resp.responseCredential);
                 const claimedCredential = (resp.claimedCredential ?? '').trim();
+                const claimedPool = claimedCredential.startsWith('pool') ? claimedCredential : null;
                 const derivedStake =
                   deriveStakeFromAddress(resp.responseCredential) ??
                   deriveStakeFromAddress(resp.voterAddress ?? '') ??
@@ -1048,13 +1049,15 @@ export function TallyDashboard({ survey }: Props) {
                 const unverifiedClaimedPool = !isCounted && claimedCredential.startsWith('pool')
                   ? claimedCredential
                   : null;
-                const cred = role === 'SPO' || role === 'CC'
-                  ? (role === 'CC'
-                      ? (ccCold ?? derivedStake ?? resp.responseCredential)
-                      : (unverifiedClaimedPool ?? spoPool ?? derivedStake ?? resp.responseCredential))
-                  : role === 'DRep'
-                    ? resp.responseCredential
-                    : (addrDisplay ?? resp.responseCredential);
+                const cred = claimedPool
+                  ? claimedPool
+                  : role === 'SPO' || role === 'CC'
+                    ? (role === 'CC'
+                        ? (ccCold ?? derivedStake ?? resp.responseCredential)
+                        : (unverifiedClaimedPool ?? spoPool ?? derivedStake ?? resp.responseCredential))
+                    : role === 'DRep'
+                      ? resp.responseCredential
+                      : (addrDisplay ?? resp.responseCredential);
                 const isDRepId = cred.startsWith('drep');
                 const isCcCold = cred.startsWith('cc_cold');
                 const isPoolId = cred.startsWith('pool');
