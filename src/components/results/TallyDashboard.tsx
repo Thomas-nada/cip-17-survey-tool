@@ -220,6 +220,7 @@ export function TallyDashboard({ survey }: Props) {
   const [displayPowerLoading, setDisplayPowerLoading] = useState(false);
   const [resolvedRoleByCredential, setResolvedRoleByCredential] = useState<Map<string, EligibilityRole>>(new Map());
   const [resolvedCcColdByCredential, setResolvedCcColdByCredential] = useState<Map<string, string>>(new Map());
+  const [resolvedSpoPoolByCredential, setResolvedSpoPoolByCredential] = useState<Map<string, string>>(new Map());
   const [resolvedDisplayCredentialByTx, setResolvedDisplayCredentialByTx] = useState<Map<string, string>>(new Map());
   const [optionSortMode, setOptionSortMode] = useState<OptionSortMode>(
     () => getUserPreferences().defaultResultsSort
@@ -456,6 +457,7 @@ export function TallyDashboard({ survey }: Props) {
     if (responses.length === 0 || !isOnChainMode || !blockfrostClient) {
       setResolvedRoleByCredential(new Map());
       setResolvedCcColdByCredential(new Map());
+      setResolvedSpoPoolByCredential(new Map());
       return;
     }
 
@@ -479,6 +481,7 @@ export function TallyDashboard({ survey }: Props) {
     (async () => {
       const roleMap = new Map<string, EligibilityRole>();
       const ccColdMap = new Map<string, string>();
+      const spoPoolMap = new Map<string, string>();
       for (const { credential, voterAddress } of unique.values()) {
         if (cancelled) return;
         try {
@@ -498,6 +501,7 @@ export function TallyDashboard({ survey }: Props) {
           if (shouldCheckSPO && credential.startsWith('pool')) {
             if (await blockfrostClient.isActivePool(credential)) {
               roleMap.set(credential, 'SPO');
+              spoPoolMap.set(credential, credential);
               continue;
             }
           }
@@ -512,6 +516,10 @@ export function TallyDashboard({ survey }: Props) {
           }
           if (shouldCheckSPO && await blockfrostClient.isSPO(stakeAddress)) {
             roleMap.set(credential, 'SPO');
+            const accountInfo = await blockfrostClient.getAccountInfo(stakeAddress);
+            if (accountInfo?.pool_id) {
+              spoPoolMap.set(credential, accountInfo.pool_id);
+            }
             continue;
           }
           if (shouldCheckStakeholder && await blockfrostClient.isStakeholder(stakeAddress)) {
@@ -524,6 +532,7 @@ export function TallyDashboard({ survey }: Props) {
       if (!cancelled) {
         setResolvedRoleByCredential(roleMap);
         setResolvedCcColdByCredential(ccColdMap);
+        setResolvedSpoPoolByCredential(spoPoolMap);
       }
     })();
 
@@ -1023,6 +1032,7 @@ export function TallyDashboard({ survey }: Props) {
                   ?? (resp.voterAddress ? stakeMap.get(resp.voterAddress) : undefined);
                 const role = resolvedRoleByCredential.get(resp.responseCredential);
                 const ccCold = resolvedCcColdByCredential.get(resp.responseCredential);
+                const spoPool = resolvedSpoPoolByCredential.get(resp.responseCredential);
                 const derivedStake =
                   deriveStakeFromAddress(resp.responseCredential) ??
                   deriveStakeFromAddress(resp.voterAddress ?? '') ??
@@ -1031,17 +1041,20 @@ export function TallyDashboard({ survey }: Props) {
                   (resp.voterAddress?.startsWith('addr') ? resp.voterAddress : null) ??
                   (resp.responseCredential.startsWith('addr') ? resp.responseCredential : null);
                 const cred = role === 'SPO' || role === 'CC'
-                  ? (role === 'CC' ? (ccCold ?? derivedStake ?? resp.responseCredential) : (derivedStake ?? resp.responseCredential))
+                  ? (role === 'CC' ? (ccCold ?? derivedStake ?? resp.responseCredential) : (spoPool ?? derivedStake ?? resp.responseCredential))
                   : role === 'DRep'
                     ? resp.responseCredential
                     : (addrDisplay ?? resp.responseCredential);
                 const isDRepId = cred.startsWith('drep');
                 const isCcCold = cred.startsWith('cc_cold');
+                const isPoolId = cred.startsWith('pool');
                 const explorerBase = explorerProvider === 'cexplorer'
                   ? (mode === 'mainnet' ? 'https://cexplorer.io' : 'https://preview.cexplorer.io')
                   : (mode === 'mainnet' ? 'https://cardanoscan.io' : 'https://preview.cardanoscan.io');
                 const explorerUrl = isDRepId
                   ? `${explorerBase}/drep/${cred}`
+                  : isPoolId
+                    ? `${explorerBase}/pool/${cred}`
                   : !isCcCold
                     ? `${explorerBase}/address/${cred}`
                     : '';
