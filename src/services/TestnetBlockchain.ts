@@ -435,6 +435,7 @@ export class TestnetBlockchain implements BlockchainService {
     const signerStakeAddress = await this.resolveSignerStakeAddress(voterAddress);
     const canonicalSignerCredential = voterAddress;
     const hasRoleRequirement = requiredRoles.length > 0;
+    const requiresSPO = requiredRoles.includes('SPO');
     const wantsDRep = requiredRoles.includes('DRep') && Boolean(claimed?.startsWith('drep'));
     const wantsCC = requiredRoles.includes('CC') && Boolean(claimed?.startsWith('cc_cold'));
     const wantsSPO = requiredRoles.includes('SPO') && Boolean(claimed && (claimed.startsWith('stake') || claimed.startsWith('addr') || claimed.startsWith('pool')));
@@ -532,52 +533,50 @@ export class TestnetBlockchain implements BlockchainService {
       };
     }
 
-    if (wantsSPO && claimed) {
-      const proof = await this.verifyProof(response, claimed);
-      if (!proof.ok || !proof.keyHashHex) {
-        return {
-          canonicalCredential: canonicalSignerCredential,
-          verified: false,
-          reason: proof.reason,
-        };
-      }
+    if (requiresSPO && signerStakeAddress) {
+      try {
+        const accountInfo = await this.blockfrost.getAccountInfo(signerStakeAddress);
+        const signerPoolId = accountInfo?.pool_id ?? null;
 
-      // Path A (existing): stake-key proof tied to signer wallet stake credential.
-      if (signerStakeAddress) {
-        const proofStake = this.deriveStakeAddressFromKeyHash(proof.keyHashHex, this.mode === 'mainnet');
-        if (proofStake === signerStakeAddress) {
-          const isSpoByStake = await this.blockfrost.isSPO(signerStakeAddress);
-          if (isSpoByStake) {
+        // Requested SPO policy:
+        // wallet stake account + linked pool id is sufficient verification.
+        if (signerPoolId) {
+          return {
+            canonicalCredential: signerPoolId,
+            verified: true,
+          };
+        }
+
+        // Optional proof path remains supported for cold-key / Calidus-style SPO flows.
+        if (wantsSPO && claimed) {
+          const proof = await this.verifyProof(response, claimed);
+          if (!proof.ok || !proof.keyHashHex) {
             return {
-              canonicalCredential: signerStakeAddress,
+              canonicalCredential: canonicalSignerCredential,
+              verified: false,
+              reason: proof.reason,
+            };
+          }
+
+          const derivedPoolId = this.derivePoolIdFromKeyHash(proof.keyHashHex);
+          const isSpoByPool = await this.blockfrost.isActivePool(derivedPoolId);
+          if (isSpoByPool) {
+            if (claimed.startsWith('pool') && claimed !== derivedPoolId) {
+              return {
+                canonicalCredential: canonicalSignerCredential,
+                verified: false,
+                reason: 'Proof key does not derive claimed pool credential',
+              };
+            }
+            return {
+              canonicalCredential: claimed.startsWith('pool') ? claimed : derivedPoolId,
               verified: true,
             };
           }
         }
+      } catch {
+        // Fall through to other role checks / final failure.
       }
-
-      // Path B (optional): cold-key style proof resolves to pool id (Calidus-compatible).
-      const derivedPoolId = this.derivePoolIdFromKeyHash(proof.keyHashHex);
-      const isSpoByPool = await this.blockfrost.isActivePool(derivedPoolId);
-      if (isSpoByPool) {
-        if (claimed.startsWith('pool') && claimed !== derivedPoolId) {
-          return {
-            canonicalCredential: canonicalSignerCredential,
-            verified: false,
-            reason: 'Proof key does not derive claimed pool credential',
-          };
-        }
-        return {
-          canonicalCredential: claimed.startsWith('pool') ? claimed : derivedPoolId,
-          verified: true,
-        };
-      }
-
-      return {
-        canonicalCredential: canonicalSignerCredential,
-        verified: false,
-        reason: 'SPO proof could not be verified by stake-key or pool cold-key path',
-      };
     }
 
     if (allowsStakeholder) {
