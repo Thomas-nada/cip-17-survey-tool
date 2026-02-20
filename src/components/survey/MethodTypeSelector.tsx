@@ -1,6 +1,7 @@
 import { BUILTIN_METHODS } from '../../constants/methodTypes.ts';
 import type { MethodType } from '../../types/survey.ts';
 import { ListChecks, CheckSquare, Sliders } from 'lucide-react';
+import { useI18n } from '../../context/I18nContext.tsx';
 
 const ICONS = {
   'urn:cardano:poll-method:single-choice:v1': ListChecks,
@@ -14,10 +15,11 @@ interface Props {
 }
 
 export function MethodTypeSelector({ value, onChange }: Props) {
+  const { t } = useI18n();
   return (
     <div className="space-y-2">
       <label className="block text-sm font-medium text-slate-300">
-        Voting Method <span className="text-red-400">*</span>
+        {t('create.method')} <span className="text-red-400">*</span>
       </label>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {BUILTIN_METHODS.map((method) => {
@@ -47,10 +49,24 @@ export function MethodTypeSelector({ value, onChange }: Props) {
                     selected ? 'text-teal-300' : 'text-slate-300'
                   }`}
                 >
-                  {method.label}
+                  {method.value === 'urn:cardano:poll-method:single-choice:v1'
+                    ? t('detail.methodSingleChoice')
+                    : method.value === 'urn:cardano:poll-method:multi-select:v1'
+                      ? t('detail.methodMultiSelect')
+                      : method.value === 'urn:cardano:poll-method:numeric-range:v1'
+                        ? t('detail.methodNumericRange')
+                        : ''}
                 </span>
               </div>
-              <p className="text-xs text-slate-500">{method.description}</p>
+              <p className="text-xs text-slate-500">
+                {method.value === 'urn:cardano:poll-method:single-choice:v1'
+                  ? t('create.methodDescSingle')
+                  : method.value === 'urn:cardano:poll-method:multi-select:v1'
+                    ? t('create.methodDescMulti')
+                    : method.value === 'urn:cardano:poll-method:numeric-range:v1'
+                      ? t('create.methodDescNumeric')
+                      : ''}
+              </p>
             </button>
           );
         })}

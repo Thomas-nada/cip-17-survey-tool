@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Copy, Check, FileJson } from 'lucide-react';
 import type { SurveyDetails } from '../../types/survey.ts';
 import { computeSurveyHash } from '../../utils/hashing.ts';
 import { getSurveyCBORBytes } from '../../utils/cbor.ts';
 import { METADATA_LABEL } from '../../constants/methodTypes.ts';
+import { useI18n } from '../../context/I18nContext.tsx';
+import { buildCopyContent, getUserPreferences } from '../../utils/userPreferences.ts';
 
 interface Props {
   details: SurveyDetails;
@@ -12,8 +14,10 @@ interface Props {
 }
 
 export function MetadataPreview({ details, msg, isValid }: Props) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const [showCbor, setShowCbor] = useState(false);
+  const [prefs, setPrefs] = useState(() => getUserPreferences());
 
   const { payload, surveyHash, cborHex } = useMemo(() => {
     if (!isValid) {
@@ -60,18 +64,32 @@ export function MetadataPreview({ details, msg, isValid }: Props) {
 
   const copyToClipboard = async () => {
     if (payload) {
-      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      await navigator.clipboard.writeText(buildCopyContent(prefs.copyFormat, payload));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  useEffect(() => {
+    const apply = () => setPrefs(getUserPreferences());
+    const onPrefChanged = () => apply();
+    const onStorage = (e: StorageEvent) => {
+      if (!e.key || e.key.startsWith('cip17_pref_')) apply();
+    };
+    window.addEventListener('cip17:preferences-changed', onPrefChanged as EventListener);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('cip17:preferences-changed', onPrefChanged as EventListener);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 
   if (!isValid || !payload) {
     return (
       <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl p-6 text-center">
         <FileJson className="w-8 h-8 text-slate-600 mx-auto mb-2" />
         <p className="text-sm text-slate-500">
-          Fill in the required fields to see the metadata preview
+          {t('create.completeRequiredToViewMetadata')}
         </p>
       </div>
     );
@@ -84,7 +102,7 @@ export function MetadataPreview({ details, msg, isValid }: Props) {
         <div className="flex items-center gap-2">
           <FileJson className="w-4 h-4 text-teal-400" />
           <span className="text-sm font-medium text-slate-300">
-            Label 17 Metadata Payload
+            {t('create.label17MetadataPayload')}
           </span>
         </div>
         <button
@@ -96,7 +114,7 @@ export function MetadataPreview({ details, msg, isValid }: Props) {
           ) : (
             <Copy className="w-3.5 h-3.5" />
           )}
-          {copied ? 'Copied!' : 'Copy JSON'}
+          {copied ? t('common.copied') : t('common.copyJson')}
         </button>
       </div>
 
@@ -105,7 +123,7 @@ export function MetadataPreview({ details, msg, isValid }: Props) {
         <div className="flex items-center gap-2 mb-1">
           <div className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
           <span className="text-xs font-medium text-teal-400">
-            Survey Hash (blake2b-256)
+            {t('create.surveyHashBlake')}
           </span>
         </div>
         <code className="text-xs font-code text-teal-300 break-all">
@@ -126,7 +144,7 @@ export function MetadataPreview({ details, msg, isValid }: Props) {
           onClick={() => setShowCbor(!showCbor)}
           className="w-full px-4 py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors text-left"
         >
-          {showCbor ? 'Hide' : 'Show'} Canonical CBOR (hash preimage)
+          {(showCbor ? t('common.hide') : t('common.show')) + ' ' + t('create.canonicalCborPreimage')}
         </button>
         {showCbor && cborHex && (
           <div className="px-4 pb-3">

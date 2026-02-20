@@ -1,4 +1,5 @@
 import type { NumericConstraints } from '../../types/survey.ts';
+import { useI18n } from '../../context/I18nContext.tsx';
 
 interface Props {
   value: NumericConstraints;
@@ -6,16 +7,17 @@ interface Props {
 }
 
 export function NumericConstraintsEditor({ value, onChange }: Props) {
+  const { t } = useI18n();
   return (
     <div className="space-y-4">
       <label className="block text-sm font-medium text-slate-300">
-        Numeric Constraints <span className="text-red-400">*</span>
+        {t('create.numericConstraints')} <span className="text-red-400">*</span>
       </label>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label className="block text-xs text-slate-400 mb-1">
-            Min Value <span className="text-red-400">*</span>
+            {t('create.minValue')} <span className="text-red-400">*</span>
           </label>
           <input
             type="number"
@@ -29,7 +31,7 @@ export function NumericConstraintsEditor({ value, onChange }: Props) {
 
         <div>
           <label className="block text-xs text-slate-400 mb-1">
-            Max Value <span className="text-red-400">*</span>
+            {t('create.maxValue')} <span className="text-red-400">*</span>
           </label>
           <input
             type="number"
@@ -43,7 +45,7 @@ export function NumericConstraintsEditor({ value, onChange }: Props) {
 
         <div>
           <label className="block text-xs text-slate-400 mb-1">
-            Step <span className="text-slate-600">(optional)</span>
+            {t('create.step')} <span className="text-slate-600">({t('create.optional')})</span>
           </label>
           <input
             type="number"
@@ -56,7 +58,7 @@ export function NumericConstraintsEditor({ value, onChange }: Props) {
                 step: v ? parseInt(v) || undefined : undefined,
               });
             }}
-            placeholder="Any"
+            placeholder={t('create.any')}
             className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
           />
         </div>
@@ -65,13 +67,13 @@ export function NumericConstraintsEditor({ value, onChange }: Props) {
       {value.minValue <= value.maxValue && (
         <div className="bg-slate-800/50 rounded-lg p-3">
           <p className="text-xs text-slate-400">
-            Respondents will choose a value between{' '}
+            {t('create.respondentsChooseBetween')}{' '}
             <span className="text-teal-400 font-code">{value.minValue}</span> and{' '}
             <span className="text-teal-400 font-code">{value.maxValue}</span>
             {value.step ? (
               <>
                 {' '}
-                in increments of{' '}
+                {t('create.inIncrementsOf')}{' '}
                 <span className="text-teal-400 font-code">{value.step}</span>
               </>
             ) : null}
@@ -81,7 +83,7 @@ export function NumericConstraintsEditor({ value, onChange }: Props) {
 
       {value.minValue > value.maxValue && (
         <p className="text-xs text-red-400">
-          minValue must be less than or equal to maxValue
+          {t('create.minLessThanMax')}
         </p>
       )}
     </div>

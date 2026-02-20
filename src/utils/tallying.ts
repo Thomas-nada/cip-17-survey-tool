@@ -2,7 +2,7 @@
  * Label 17 Tallying Logic
  *
  * Implements:
- * - Response deduplication by responseCredential (latest-valid-response-wins)
+ * - Response deduplication by voter address (latest-valid-response-wins)
  * - Chain ordering: (slot, txIndexInBlock)
  * - Weighting modes: CredentialBased (weight=1) and StakeBased (weight=stake)
  */
@@ -32,19 +32,33 @@ export function tallySurveyResponses(
   weighting: VoteWeighting = 'CredentialBased',
   stakeMap?: Map<string, bigint>
 ): TallyResult {
+  const voterKey = (resp: StoredResponse) => resp.voterAddress ?? resp.responseCredential;
+  const getStakeLovelace = (resp: StoredResponse): bigint | undefined => {
+    if (!stakeMap) return undefined;
+    const byTx = stakeMap.get(resp.txId);
+    if (byTx !== undefined) return byTx;
+    const byCredential = stakeMap.get(resp.responseCredential);
+    if (byCredential !== undefined) return byCredential;
+    if (resp.voterAddress) {
+      return stakeMap.get(resp.voterAddress);
+    }
+    return undefined;
+  };
+  const verifiableResponses = responses.filter((r) => r.identityVerified !== false);
+
   // 1. Sort by chain ordering (slot asc, then txIndexInBlock asc)
-  const sorted = [...responses].sort((a, b) => {
+  const sorted = [...verifiableResponses].sort((a, b) => {
     if (a.slot !== b.slot) return a.slot - b.slot;
     return a.txIndexInBlock - b.txIndexInBlock;
   });
 
-  // 2. Deduplicate: latest response per credential wins
-  const latestByCredential = new Map<string, StoredResponse>();
+  // 2. Deduplicate: latest response per voter address wins
+  const latestByVoter = new Map<string, StoredResponse>();
   for (const resp of sorted) {
-    latestByCredential.set(resp.responseCredential, resp);
+    latestByVoter.set(voterKey(resp), resp);
   }
 
-  const deduplicated = Array.from(latestByCredential.values());
+  const deduplicated = Array.from(latestByVoter.values());
   const method = survey.methodType;
 
   // 3. Compute tallies based on method type
@@ -65,8 +79,8 @@ export function tallySurveyResponses(
       // StakeBased: weight = ADA amount (lovelace / 1_000_000)
       let weight = 1;
       if (weighting === 'StakeBased' && stakeMap) {
-        const lovelace = stakeMap.get(resp.responseCredential);
-        weight = lovelace ? Number(lovelace) / 1_000_000 : 0;
+        const lovelace = getStakeLovelace(resp);
+        weight = lovelace !== undefined ? Number(lovelace) / 1_000_000 : 0;
       }
       if (resp.selection) {
         for (const idx of resp.selection) {
@@ -137,15 +151,15 @@ export function tallySurveyResponses(
   let totalWeight = 0;
   if (weighting === 'StakeBased' && stakeMap) {
     for (const resp of deduplicated) {
-      const lovelace = stakeMap.get(resp.responseCredential);
-      totalWeight += lovelace ? Number(lovelace) / 1_000_000 : 0;
+      const lovelace = getStakeLovelace(resp);
+      totalWeight += lovelace !== undefined ? Number(lovelace) / 1_000_000 : 0;
     }
   } else {
     totalWeight = deduplicated.length; // 1 per credential
   }
 
   return {
-    surveyTxId: responses[0]?.surveyTxId ?? '',
+    surveyTxId: verifiableResponses[0]?.surveyTxId ?? responses[0]?.surveyTxId ?? '',
     totalResponses: responses.length,
     uniqueCredentials: deduplicated.length,
     weighting,

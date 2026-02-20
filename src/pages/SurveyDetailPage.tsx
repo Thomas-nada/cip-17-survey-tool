@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   ArrowLeft,
   FileJson,
@@ -12,10 +12,12 @@ import {
   Sliders,
   Users,
   Hash,
+  RefreshCw,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext.tsx';
 import { SurveyResponseForm } from '../components/response/SurveyResponseForm.tsx';
 import { TallyDashboard } from '../components/results/TallyDashboard.tsx';
+import { useI18n } from '../context/I18nContext.tsx';
 import {
   METHOD_SINGLE_CHOICE,
   METHOD_MULTI_SELECT,
@@ -30,20 +32,54 @@ const METHOD_ICONS = {
   [METHOD_NUMERIC_RANGE]: Sliders,
 };
 
-const METHOD_LABELS = {
-  [METHOD_SINGLE_CHOICE]: 'Single Choice',
-  [METHOD_MULTI_SELECT]: 'Multi-Select',
-  [METHOD_NUMERIC_RANGE]: 'Numeric Range',
-};
-
 export function SurveyDetailPage() {
   const { surveyTxId } = useParams<{ surveyTxId: string }>();
   const navigate = useNavigate();
-  const { state } = useApp();
+  const { state, blockchain, dispatch, mode } = useApp();
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<Tab>('respond');
   const [copied, setCopied] = useState(false);
+  const [watchMode, setWatchMode] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshMs, setLastRefreshMs] = useState<number | null>(null);
 
   const survey = state.surveys.find((s) => s.surveyTxId === surveyTxId);
+  const isOnChainMode = mode === 'mainnet' || mode === 'testnet';
+
+  const copyHash = async () => {
+    if (!survey) return;
+    await navigator.clipboard.writeText(survey.surveyHash);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const refreshResponses = useCallback(async (full = false) => {
+    if (!surveyTxId) return;
+    setRefreshing(true);
+    try {
+      const current = state.responses.get(surveyTxId) ?? [];
+      const sinceSlot = current.reduce((max, r) => (r.slot > max ? r.slot : max), 0);
+      const latest = await blockchain.getResponses(
+        surveyTxId,
+        !full && sinceSlot > 0 ? sinceSlot : undefined
+      );
+      dispatch({
+        type: !full && sinceSlot > 0 ? 'RESPONSES_MERGED' : 'RESPONSES_LOADED',
+        payload: { surveyTxId, responses: latest },
+      });
+      setLastRefreshMs(Date.now());
+    } finally {
+      setRefreshing(false);
+    }
+  }, [blockchain, dispatch, surveyTxId, state.responses]);
+
+  useEffect(() => {
+    if (activeTab !== 'results' || !watchMode || !isOnChainMode) return;
+    const interval = window.setInterval(() => {
+      void refreshResponses(false);
+    }, 12000);
+    return () => window.clearInterval(interval);
+  }, [activeTab, watchMode, isOnChainMode, refreshResponses]);
 
   if (!survey) {
     return (
@@ -51,14 +87,14 @@ export function SurveyDetailPage() {
         <div className="inline-flex p-4 bg-slate-800/50 rounded-2xl mb-4">
           <Hash className="w-10 h-10 text-slate-600" />
         </div>
-        <p className="text-slate-400 font-medium mb-1">Survey not found</p>
-        <p className="text-sm text-slate-500 mb-6">The survey you're looking for doesn't exist</p>
+        <p className="text-slate-400 font-medium mb-1">{t('detail.notFound')}</p>
+        <p className="text-sm text-slate-500 mb-6">{t('detail.notFoundDesc')}</p>
         <button
           onClick={() => navigate('/surveys')}
           className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-violet-600 hover:from-teal-500 hover:to-violet-500 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-teal-600/20"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to surveys
+          {t('detail.backToSurveys')}
         </button>
       </div>
     );
@@ -68,19 +104,21 @@ export function SurveyDetailPage() {
     state.responses.get(survey.surveyTxId)?.length ?? 0;
 
   const MethodIcon = METHOD_ICONS[survey.details.methodType as keyof typeof METHOD_ICONS] ?? Hash;
-  const methodLabel = METHOD_LABELS[survey.details.methodType as keyof typeof METHOD_LABELS] ?? 'Custom';
+  const methodLabel = (
+    survey.details.methodType === METHOD_SINGLE_CHOICE
+      ? t('detail.methodSingleChoice')
+      : survey.details.methodType === METHOD_MULTI_SELECT
+        ? t('detail.methodMultiSelect')
+        : survey.details.methodType === METHOD_NUMERIC_RANGE
+          ? t('detail.methodNumericRange')
+          : t('detail.methodCustom')
+  );
 
   const tabs: { id: Tab; label: string; icon: typeof Vote }[] = [
-    { id: 'respond', label: 'Cast Vote', icon: Vote },
-    { id: 'results', label: `Results (${responseCount})`, icon: BarChart3 },
-    { id: 'metadata', label: 'Metadata', icon: FileJson },
+    { id: 'respond', label: t('detail.vote'), icon: Vote },
+    { id: 'results', label: `${t('detail.results')} (${responseCount})`, icon: BarChart3 },
+    { id: 'metadata', label: t('detail.technicalData'), icon: FileJson },
   ];
-
-  const copyHash = async () => {
-    await navigator.clipboard.writeText(survey.surveyHash);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -113,7 +151,7 @@ export function SurveyDetailPage() {
             )}
             <span className="flex items-center gap-1 text-xs text-slate-500">
               <Users className="w-3 h-3" />
-              {responseCount} responses
+              {responseCount} {t('detail.responses')}
             </span>
           </div>
 
@@ -127,7 +165,7 @@ export function SurveyDetailPage() {
           {/* Survey IDs */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <div className="flex items-center gap-1.5 bg-slate-800/50 border border-slate-700/30 px-3 py-1.5 rounded-lg">
-              <span className="text-slate-500 font-medium">TxId</span>
+              <span className="text-slate-500 font-medium">{t('detail.txId')}</span>
               <code className="text-slate-300 font-code">
                 {survey.surveyTxId.slice(0, 20)}...
               </code>
@@ -136,7 +174,7 @@ export function SurveyDetailPage() {
               onClick={copyHash}
               className="flex items-center gap-1.5 bg-teal-500/10 border border-teal-500/20 px-3 py-1.5 rounded-lg text-teal-400 hover:text-teal-300 hover:bg-teal-500/15 transition-all duration-200"
             >
-              <span className="font-medium">Hash</span>
+              <span className="font-medium">{t('detail.hash')}</span>
               <code className="font-code">
                 {survey.surveyHash.slice(0, 20)}...
               </code>
@@ -177,14 +215,49 @@ export function SurveyDetailPage() {
           />
         )}
 
-        {activeTab === 'results' && <TallyDashboard survey={survey} />}
+        {activeTab === 'results' && (
+          <div className="space-y-3">
+            {isOnChainMode && (
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-800/25 border border-slate-700/30 rounded-xl">
+                <div className="text-xs text-slate-400">
+                  {lastRefreshMs
+                    ? t('detail.lastRefresh', { time: new Date(lastRefreshMs).toISOString().slice(0, 16).replace('T', ' ') })
+                    : t('detail.noRefreshYet')}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setWatchMode((v) => !v)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      watchMode
+                        ? 'bg-teal-500/15 border-teal-500/30 text-teal-300'
+                        : 'bg-slate-900/40 border-slate-700/40 text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    {watchMode ? t('detail.watchOn') : t('detail.watchOff')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void refreshResponses(true)}
+                    disabled={refreshing}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-700/60 text-slate-200 hover:bg-slate-700 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                    {t('detail.refreshNow')}
+                  </button>
+                </div>
+              </div>
+            )}
+            <TallyDashboard survey={survey} />
+          </div>
+        )}
 
         {activeTab === 'metadata' && (
           <div className="bg-slate-800/30 border border-slate-700/30 rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-slate-700/30 flex items-center gap-2">
               <FileJson className="w-4 h-4 text-slate-500" />
-              <h4 className="text-sm font-semibold text-slate-300 font-heading">
-                Full Label 17 Metadata Payload
+                <h4 className="text-sm font-semibold text-slate-300 font-heading">
+                {t('detail.fullMetadata')}
               </h4>
             </div>
             <pre className="p-5 text-xs font-code text-slate-300 overflow-x-auto max-h-[600px] overflow-y-auto leading-relaxed">
@@ -193,7 +266,7 @@ export function SurveyDetailPage() {
             <div className="px-5 py-3 border-t border-slate-700/30 bg-teal-500/5">
               <p className="text-xs text-teal-400 flex items-center gap-2">
                 <Hash className="w-3 h-3" />
-                <span className="font-semibold">surveyHash:</span>{' '}
+                <span className="font-semibold">{t('detail.surveyHash')}:</span>{' '}
                 <code className="font-code">{survey.surveyHash}</code>
               </p>
             </div>

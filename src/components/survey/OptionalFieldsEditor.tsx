@@ -7,6 +7,7 @@ import type {
   ReferenceAction,
   Lifecycle,
 } from '../../types/survey.ts';
+import { useI18n } from '../../context/I18nContext.tsx';
 
 interface Props {
   eligibility?: EligibilityRole[];
@@ -29,6 +30,7 @@ export function OptionalFieldsEditor({
   lifecycle,
   onLifecycleChange,
 }: Props) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
 
   const toggleEligibility = (role: EligibilityRole) => {
@@ -49,7 +51,7 @@ export function OptionalFieldsEditor({
         className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/50 hover:bg-slate-800 transition-colors"
       >
         <span className="text-sm font-medium text-slate-300">
-          Optional Fields
+          {t('create.optionalFields')}
         </span>
         {expanded ? (
           <ChevronDown className="w-4 h-4 text-slate-500" />
@@ -63,7 +65,7 @@ export function OptionalFieldsEditor({
           {/* Eligibility */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Eligibility Roles
+              {t('create.eligibilityRoles')}
             </label>
             <div className="flex flex-wrap gap-2">
               {ELIGIBILITY_ROLES.map((role) => (
@@ -77,7 +79,7 @@ export function OptionalFieldsEditor({
                       : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
                   }`}
                 >
-                  {role}
+                  {t(`role.${role}`)}
                 </button>
               ))}
             </div>
@@ -86,7 +88,7 @@ export function OptionalFieldsEditor({
           {/* Vote Weighting */}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Vote Weighting
+              {t('create.voteWeighting')}
             </label>
             <div className="flex gap-3">
               {VOTE_WEIGHTINGS.map((w) => (
@@ -102,12 +104,12 @@ export function OptionalFieldsEditor({
                       : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
                   }`}
                 >
-                  {w}
+                  {w === 'StakeBased' ? t('results.stakeBased') : t('results.credentialBased')}
                 </button>
               ))}
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Default: CredentialBased (1 vote per credential)
+              {t('create.defaultCredentialBased')}
             </p>
           </div>
 
@@ -115,7 +117,7 @@ export function OptionalFieldsEditor({
           <div>
             <div className="flex items-center gap-2 mb-2">
               <label className="text-sm font-medium text-slate-300">
-                Governance Action Reference
+                {t('create.govActionReference')}
               </label>
               {referenceAction ? (
                 <button
@@ -123,7 +125,7 @@ export function OptionalFieldsEditor({
                   onClick={() => onReferenceActionChange(undefined)}
                   className="text-xs text-red-400 hover:text-red-300"
                 >
-                  Remove
+                  {t('common.remove')}
                 </button>
               ) : (
                 <button
@@ -136,7 +138,7 @@ export function OptionalFieldsEditor({
                   }
                   className="text-xs text-teal-400 hover:text-teal-300"
                 >
-                  Add
+                  {t('common.add')}
                 </button>
               )}
             </div>
@@ -151,7 +153,7 @@ export function OptionalFieldsEditor({
                       transactionId: e.target.value,
                     })
                   }
-                  placeholder="Transaction ID (64 hex chars)"
+                  placeholder={t('create.transactionIdPlaceholder')}
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
                 />
                 <input
@@ -164,7 +166,7 @@ export function OptionalFieldsEditor({
                       actionIndex: parseInt(e.target.value) || 0,
                     })
                   }
-                  placeholder="Action Index"
+                  placeholder={t('create.actionIndex')}
                   className="w-32 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
                 />
               </div>
@@ -175,7 +177,7 @@ export function OptionalFieldsEditor({
           <div>
             <div className="flex items-center gap-2 mb-2">
               <label className="text-sm font-medium text-slate-300">
-                End Epoch
+                {t('create.endEpoch')}
               </label>
               {lifecycle ? (
                 <button
@@ -183,7 +185,7 @@ export function OptionalFieldsEditor({
                   onClick={() => onLifecycleChange(undefined)}
                   className="text-xs text-red-400 hover:text-red-300"
                 >
-                  Remove
+                  {t('common.remove')}
                 </button>
               ) : (
                 <button
@@ -193,7 +195,7 @@ export function OptionalFieldsEditor({
                   }
                   className="text-xs text-teal-400 hover:text-teal-300"
                 >
-                  Add
+                  {t('common.add')}
                 </button>
               )}
             </div>
@@ -201,7 +203,7 @@ export function OptionalFieldsEditor({
               <div className="pl-4 border-l-2 border-slate-700">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">
-                    Survey closes at end of epoch
+                    {t('create.surveyClosesAtEndEpoch')}
                   </label>
                   <input
                     type="number"
@@ -212,11 +214,11 @@ export function OptionalFieldsEditor({
                         endEpoch: parseInt(e.target.value) || 0,
                       })
                     }
-                    placeholder="e.g. 172"
+                    placeholder={t('create.endEpochPlaceholder')}
                     className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    Survey is live immediately after submission
+                    {t('create.surveyLiveImmediately')}
                   </p>
                 </div>
               </div>

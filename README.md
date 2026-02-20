@@ -1,5 +1,24 @@
 # React + TypeScript + Vite
 
+## Blockfrost Keys via .env
+
+Create a `.env` file in the project root (or copy `.env.example`) and set:
+
+```bash
+BLOCKFROST_MAINNET_PROJECT_ID=...
+BLOCKFROST_TESTNET_PROJECT_ID=...
+```
+
+Start backend + frontend together:
+
+```bash
+npm run dev:full
+```
+
+The backend reads keys from `.env` and the browser app talks to the backend proxy, so keys are not embedded in client code.
+
+Default backend URL is `http://localhost:8787` (proxied in Vite as `/api`).
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

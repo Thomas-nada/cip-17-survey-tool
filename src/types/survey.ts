@@ -54,6 +54,15 @@ export interface SurveyResponse {
   specVersion: string;
   surveyTxId: string;
   surveyHash: string;
+  /** Canonical voter identifier, e.g. DRep ID or wallet address */
+  responseCredential?: string;
+  /** Optional cryptographic identity proof (CLI / non-hot-wallet flows) */
+  proof?: {
+    message: string;
+    key: string;
+    signature: string;
+    scheme?: string;
+  };
   selection?: number[];
   numericValue?: number;
   customValue?: unknown;
@@ -84,7 +93,18 @@ export interface StoredSurvey {
 
 export interface StoredResponse {
   txId: string;
+  /** Canonical credential used for deduplication/tally display */
   responseCredential: string;
+  /** Claimed credential from metadata payload (untrusted) */
+  claimedCredential?: string;
+  /** Optional wallet address observed from tx inputs (for stake lookups) */
+  voterAddress?: string;
+  /** Whether claimed identity could be verified against tx signer */
+  identityVerified?: boolean;
+  /** Reason identity was not verified (if any) */
+  identityVerificationReason?: string;
+  /** UTC timestamp in milliseconds since epoch */
+  timestampMs?: number;
   surveyTxId: string;
   surveyHash: string;
   selection?: number[];

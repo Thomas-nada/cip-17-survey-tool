@@ -2,11 +2,10 @@
  * Application Context
  *
  * Provides:
- * - App mode (simulated / testnet)
+ * - Network mode (mainnet / testnet)
  * - Blockchain service instance
  * - Survey state management
  * - Wallet connection state (CIP-30)
- * - Auto-seeding of simulated blockchain with demo data
  */
 import React, {
   createContext,
@@ -18,7 +17,6 @@ import React, {
   useEffect,
   type ReactNode,
 } from 'react';
-import { SimulatedBlockchain } from '../services/SimulatedBlockchain.ts';
 import { TestnetBlockchain } from '../services/TestnetBlockchain.ts';
 import { BlockfrostClient } from '../services/BlockfrostClient.ts';
 import type { BlockchainService } from '../services/BlockchainService.ts';
@@ -34,7 +32,7 @@ import {
 } from '../hooks/useCardanoWallet.ts';
 
 // ─── Types ──────────────────────────────────────────────────────────
-export type AppMode = 'simulated' | 'testnet';
+export type AppMode = 'mainnet' | 'testnet';
 
 interface SurveyState {
   surveys: StoredSurvey[];
@@ -50,6 +48,7 @@ type SurveyAction =
   | { type: 'TALLY_COMPUTED'; payload: { surveyTxId: string; tally: TallyResult } }
   | { type: 'SURVEYS_LOADED'; payload: StoredSurvey[] }
   | { type: 'RESPONSES_LOADED'; payload: { surveyTxId: string; responses: StoredResponse[] } }
+  | { type: 'RESPONSES_MERGED'; payload: { surveyTxId: string; responses: StoredResponse[] } }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'CLEAR_STATE' }
@@ -59,12 +58,16 @@ interface AppContextValue {
   mode: AppMode;
   setMode: (mode: AppMode) => void;
   blockchain: BlockchainService;
-  /** BlockfrostClient instance (available when in testnet mode) */
+  /** BlockfrostClient instance for the active network */
   blockfrostClient: BlockfrostClient | null;
+  backendHealth: {
+    ok: boolean;
+    mainnetKey: boolean;
+    testnetKey: boolean;
+    checkedAt: number | null;
+  };
   state: SurveyState;
   dispatch: React.Dispatch<SurveyAction>;
-  blockfrostApiKey: string;
-  setBlockfrostApiKey: (key: string) => void;
   // Wallet state
   wallet: {
     availableWallets: DetectedWallet[];
@@ -128,6 +131,20 @@ function surveyReducer(state: SurveyState, action: SurveyAction): SurveyState {
       return { ...state, responses: newResponses };
     }
 
+    case 'RESPONSES_MERGED': {
+      const newResponses = new Map(state.responses);
+      const existing = newResponses.get(action.payload.surveyTxId) ?? [];
+      const byTx = new Map<string, StoredResponse>();
+      for (const resp of existing) byTx.set(resp.txId, resp);
+      for (const resp of action.payload.responses) byTx.set(resp.txId, resp);
+      const merged = Array.from(byTx.values()).sort((a, b) => {
+        if (a.slot !== b.slot) return b.slot - a.slot;
+        return b.txIndexInBlock - a.txIndexInBlock;
+      });
+      newResponses.set(action.payload.surveyTxId, merged);
+      return { ...state, responses: newResponses };
+    }
+
     case 'SET_LOADING':
       return { ...state, loading: action.payload };
 
@@ -157,19 +174,14 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [mode, setModeRaw] = React.useState<AppMode>(
-    () => (localStorage.getItem('cip17_mode') as AppMode) || 'simulated'
+    () => (localStorage.getItem('cip17_mode') as AppMode) || 'mainnet'
   );
-  const [blockfrostApiKey, setBlockfrostApiKeyRaw] = React.useState(
-    () => localStorage.getItem('cip17_blockfrost_key') || ''
-  );
-  const setBlockfrostApiKey = React.useCallback((key: string) => {
-    setBlockfrostApiKeyRaw(key);
-    if (key) {
-      localStorage.setItem('cip17_blockfrost_key', key);
-    } else {
-      localStorage.removeItem('cip17_blockfrost_key');
-    }
-  }, []);
+  const [backendHealth, setBackendHealth] = React.useState({
+    ok: false,
+    mainnetKey: false,
+    testnetKey: false,
+    checkedAt: null as number | null,
+  });
   const [state, dispatch] = useReducer(surveyReducer, initialState);
 
   // CIP-30 wallet hook
@@ -185,62 +197,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     disconnect: walletDisconnect,
   } = useCardanoWallet();
 
-  // Keep simulated blockchain as singleton across re-renders
-  const simulatedRef = useRef(new SimulatedBlockchain());
-  // Keep testnet blockchain ref so we can call setConnectedWallet on it
+  // Keep blockchain ref so we can call setConnectedWallet on it
   const testnetRef = useRef<TestnetBlockchain | null>(null);
-
-  // Auto-seed simulated blockchain on mount
-  useEffect(() => {
-    if (mode === 'simulated') {
-      const seedResult = simulatedRef.current.seed();
-      dispatch({
-        type: 'BULK_LOAD',
-        payload: {
-          surveys: seedResult.surveys,
-          responses: seedResult.responses,
-        },
-      });
-    }
-  }, []); // Only on mount
 
   const setMode = useCallback((newMode: AppMode) => {
     setModeRaw(newMode);
     localStorage.setItem('cip17_mode', newMode);
-    if (newMode === 'simulated') {
-      // Re-load seed data when switching back to simulated
-      const seedResult = simulatedRef.current.seed();
-      dispatch({
-        type: 'BULK_LOAD',
-        payload: {
-          surveys: seedResult.surveys,
-          responses: seedResult.responses,
-        },
-      });
-    } else {
-      dispatch({ type: 'CLEAR_STATE' });
-    }
+    dispatch({ type: 'CLEAR_STATE' });
   }, []);
 
-  // Connect wallet — auto-switch to testnet mode
   const connect = useCallback(async (walletId: string) => {
     try {
       const api = await walletConnect(walletId);
-      // Auto-switch to testnet mode when wallet connects
-      if (mode !== 'testnet') {
-        setModeRaw('testnet');
-        dispatch({ type: 'CLEAR_STATE' });
-      }
       return api;
     } catch (err) {
       throw err;
     }
-  }, [walletConnect, mode]);
+  }, [walletConnect]);
 
   // Disconnect wallet
   const disconnect = useCallback(() => {
     walletDisconnect();
-    // Clear wallet name on testnet blockchain
+    // Clear wallet name on blockchain service
     if (testnetRef.current) {
       testnetRef.current.setConnectedWallet(null);
     }
@@ -250,36 +228,57 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const blockfrostClientRef = useRef<BlockfrostClient | null>(null);
 
   const blockchain = useMemo<BlockchainService>(() => {
-    if (mode === 'simulated') {
-      blockfrostClientRef.current = null;
-      return simulatedRef.current;
-    } else {
-      const client = new BlockfrostClient(
-        blockfrostApiKey || 'your-project-id',
-        'preview'
-      );
-      blockfrostClientRef.current = client;
-      const testnet = new TestnetBlockchain(client, () => null);
-      testnetRef.current = testnet;
-      // If wallet is already connected, set its name
-      if (connectedWallet) {
-        testnet.setConnectedWallet(connectedWallet.id);
-      }
-      return testnet;
+    const network = mode === 'mainnet' ? 'mainnet' : 'preview';
+    const client = new BlockfrostClient(
+      '',
+      network
+    );
+    blockfrostClientRef.current = client;
+    const testnet = new TestnetBlockchain(client, () => null, mode);
+    testnetRef.current = testnet;
+    // If wallet is already connected, set its name
+    if (connectedWallet) {
+      testnet.setConnectedWallet(connectedWallet.id);
     }
-  }, [mode, blockfrostApiKey, connectedWallet]);
+    return testnet;
+  }, [connectedWallet, mode]);
 
-  // Sync wallet name to testnet blockchain when wallet changes
+  // Sync wallet name to blockchain service when wallet changes
   useEffect(() => {
     if (testnetRef.current) {
       testnetRef.current.setConnectedWallet(connectedWallet?.id ?? null);
     }
   }, [connectedWallet]);
 
-  // Fetch surveys from Blockfrost when in testnet mode with a valid API key
+  // Poll backend health and key availability
   useEffect(() => {
-    if (mode !== 'testnet' || !blockfrostApiKey) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const health = await blockfrostClientRef.current?.getServiceHealth();
+        if (cancelled || !health) return;
+        setBackendHealth({
+          ok: Boolean(health.ok),
+          mainnetKey: Boolean(health.keys?.mainnet),
+          testnetKey: Boolean(health.keys?.testnet),
+          checkedAt: typeof health.ts === 'number' ? health.ts : Date.now(),
+        });
+      } catch {
+        if (!cancelled) {
+          setBackendHealth((prev) => ({ ...prev, ok: false, checkedAt: Date.now() }));
+        }
+      }
+    };
+    void run();
+    const interval = window.setInterval(() => { void run(); }, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [mode, blockchain]);
 
+  // Fetch surveys from backend index
+  useEffect(() => {
     let cancelled = false;
     dispatch({ type: 'SET_LOADING', payload: true });
 
@@ -313,7 +312,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     return () => { cancelled = true; };
-  }, [mode, blockfrostApiKey, blockchain]);
+  }, [blockchain]);
 
   const walletState = useMemo(() => ({
     availableWallets,
@@ -337,13 +336,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMode,
       blockchain,
       blockfrostClient: blockfrostClientRef.current,
+      backendHealth,
       state,
       dispatch,
-      blockfrostApiKey,
-      setBlockfrostApiKey,
       wallet: walletState,
     }),
-    [mode, setMode, blockchain, state, blockfrostApiKey, walletState]
+    [mode, setMode, blockchain, backendHealth, state, walletState]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
