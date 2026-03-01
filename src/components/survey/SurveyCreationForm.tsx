@@ -503,6 +503,40 @@ export function SurveyCreationForm({ onCreated }: Props) {
             </div>
           </div>
 
+          {/* Lifecycle (Required) */}
+          <div className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Lifecycle Window <span className="text-red-400">*</span>
+            </label>
+            <div className="pl-4 border-l-2 border-slate-700">
+              <label className="block text-xs text-slate-400 mb-1">
+                {t('create.endEpoch')} (required)
+              </label>
+              <input
+                type="number"
+                min={typeof currentEpoch === 'number' ? currentEpoch + 1 : 1}
+                max={typeof currentEpoch === 'number' ? currentEpoch + 10 : 10}
+                value={lifecycle.endEpoch ?? ''}
+                onChange={(e) => {
+                  const value = parseInt(e.target.value, 10);
+                  setLifecycle((prev) => ({ ...prev, endEpoch: Number.isNaN(value) ? 0 : value }));
+                  setLifecycleTouched(true);
+                }}
+                placeholder={
+                  typeof currentEpoch === 'number'
+                    ? String(currentEpoch + 6)
+                    : t('create.endEpochPlaceholder')
+                }
+                className="w-44 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                {typeof currentEpoch === 'number'
+                  ? `Allowed range: ${currentEpoch + 1} to ${currentEpoch + 10}. Default is ${currentEpoch + 6}.`
+                  : 'Allowed range: current epoch +1 to +10. Default is +6.'}
+              </p>
+            </div>
+          </div>
+
           {/* Optional Fields */}
           <OptionalFieldsEditor
             eligibility={eligibility}
@@ -511,14 +545,6 @@ export function SurveyCreationForm({ onCreated }: Props) {
             onVoteWeightingChange={setVoteWeighting}
             referenceAction={referenceAction}
             onReferenceActionChange={setReferenceAction}
-            lifecycle={lifecycle}
-            onLifecycleChange={(next) => {
-              if (next) {
-                setLifecycle(next);
-              }
-              setLifecycleTouched(true);
-            }}
-            currentEpoch={currentEpoch}
           />
 
           {/* Validation errors */}

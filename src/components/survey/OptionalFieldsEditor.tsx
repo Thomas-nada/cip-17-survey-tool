@@ -5,7 +5,6 @@ import type {
   EligibilityRole,
   VoteWeighting,
   ReferenceAction,
-  Lifecycle,
 } from '../../types/survey.ts';
 import { useI18n } from '../../context/I18nContext.tsx';
 
@@ -16,9 +15,6 @@ interface Props {
   onVoteWeightingChange: (w: VoteWeighting | undefined) => void;
   referenceAction?: ReferenceAction;
   onReferenceActionChange: (ra: ReferenceAction | undefined) => void;
-  lifecycle?: Lifecycle;
-  onLifecycleChange: (lc: Lifecycle | undefined) => void;
-  currentEpoch?: number | null;
 }
 
 export function OptionalFieldsEditor({
@@ -28,9 +24,6 @@ export function OptionalFieldsEditor({
   onVoteWeightingChange,
   referenceAction,
   onReferenceActionChange,
-  lifecycle,
-  onLifecycleChange,
-  currentEpoch,
 }: Props) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
@@ -175,44 +168,6 @@ export function OptionalFieldsEditor({
             )}
           </div>
 
-          {/* Lifecycle */}
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <label className="text-sm font-medium text-slate-300">
-                Lifecycle Window
-              </label>
-            </div>
-            <div className="pl-4 border-l-2 border-slate-700">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">
-                  {t('create.endEpoch')} (required)
-                </label>
-                <input
-                  type="number"
-                  min={typeof currentEpoch === 'number' ? currentEpoch + 1 : 1}
-                  max={typeof currentEpoch === 'number' ? currentEpoch + 10 : 10}
-                  value={lifecycle?.endEpoch ?? ''}
-                  onChange={(e) =>
-                    onLifecycleChange({
-                      ...(lifecycle ?? {}),
-                      endEpoch: parseInt(e.target.value) || 0,
-                    })
-                  }
-                  placeholder={
-                    typeof currentEpoch === 'number'
-                      ? String(currentEpoch + 6)
-                      : t('create.endEpochPlaceholder')
-                  }
-                  className="w-44 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  {typeof currentEpoch === 'number'
-                    ? `Allowed range: ${currentEpoch + 1} to ${currentEpoch + 10}. Default is ${currentEpoch + 6}.`
-                    : 'Allowed range: current epoch +1 to +10. Default is +6.'}
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
       )}
     </div>
