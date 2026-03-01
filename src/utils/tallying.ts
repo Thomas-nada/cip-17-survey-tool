@@ -198,16 +198,19 @@ export function tallySurveyResponses(
     };
   });
 
-  const firstRole = roleTallies[0];
-  const firstQuestion = firstRole?.questionTallies?.[0];
+  // Backward-compatible aliases should point to a role that actually has
+  // counted responses, otherwise mixed-role surveys can appear as all-zero.
+  const primaryRole = roleTallies.find((r) => r.responses > 0) ?? roleTallies[0];
+  const firstQuestion = primaryRole?.questionTallies?.[0];
+  const totalWeightAllRoles = roleTallies.reduce((sum, r) => sum + r.totalWeight, 0);
   return {
     surveyTxId: deduplicated[0]?.surveyTxId ?? responses[0]?.surveyTxId ?? '',
     totalResponses: responses.length,
     uniqueCredentials: deduplicated.length,
     roleTallies,
-    weighting: firstRole?.weighting ?? 'CredentialBased',
-    totalWeight: firstRole?.totalWeight ?? 0,
-    questionTallies: firstRole?.questionTallies ?? [],
+    weighting: primaryRole?.weighting ?? 'CredentialBased',
+    totalWeight: totalWeightAllRoles,
+    questionTallies: primaryRole?.questionTallies ?? [],
     optionTallies: firstQuestion?.optionTallies,
     numericTally: firstQuestion?.numericTally,
   };
