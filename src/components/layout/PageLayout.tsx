@@ -68,14 +68,14 @@ export function PageLayout({ children }: { children: ReactNode }) {
               Mainnet support coming soon
             </h2>
             <p className="mt-2 text-sm text-slate-300 max-w-2xl">
-              Mainnet mode is temporarily disabled while the production rollout is finalized. Please use testnet for now.
+              Mainnet mode is temporarily disabled while the production rollout is finalized. Please use Preview for now.
             </p>
             <button
               type="button"
               onClick={() => setMode('testnet')}
               className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold transition-colors"
             >
-              Switch to Testnet
+              Switch to Preview
             </button>
           </div>
         )}
