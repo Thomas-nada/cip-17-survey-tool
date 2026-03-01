@@ -15,7 +15,7 @@ import {
   METHOD_MULTI_SELECT,
   METHOD_NUMERIC_RANGE,
 } from '../../types/survey.ts';
-import type { StoredSurvey, SurveyResponse, SurveyQuestion, EligibilityRole } from '../../types/survey.ts';
+import type { StoredSurvey, SurveyResponse, SurveyQuestion, SurveyAnswer, EligibilityRole } from '../../types/survey.ts';
 
 interface Props {
   survey: StoredSurvey;
@@ -79,6 +79,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       return [{
         questionId: 'q1',
         question: details.question,
+        required: true,
         methodType: details.methodType,
         options: details.options,
         maxSelections: details.maxSelections,
@@ -123,23 +124,30 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       surveyTxId: survey.surveyTxId,
       surveyHash: survey.surveyHash,
     };
-    base.answers = questions.map((q) => {
+    base.answers = questions.flatMap<SurveyAnswer>((q) => {
+      const isRequired = q.required !== false;
       if (q.methodType === METHOD_SINGLE_CHOICE || q.methodType === METHOD_MULTI_SELECT) {
-        return {
+        const selection = selectedByQuestion[q.questionId] ?? [];
+        if (!isRequired && selection.length === 0) return [];
+        return [{
           questionId: q.questionId,
-          selection: selectedByQuestion[q.questionId] ?? [],
-        };
+          selection,
+        }];
       }
       if (q.methodType === METHOD_NUMERIC_RANGE) {
-        return {
+        const numericValue = numericByQuestion[q.questionId];
+        if (!isRequired && numericValue === undefined) return [];
+        return [{
           questionId: q.questionId,
-          numericValue: numericByQuestion[q.questionId] ?? q.numericConstraints?.minValue ?? 0,
-        };
+          numericValue: numericValue ?? q.numericConstraints?.minValue ?? 0,
+        }];
       }
-      return {
+      const customValue = customByQuestion[q.questionId] ?? '';
+      if (!isRequired && customValue.trim().length === 0) return [];
+      return [{
         questionId: q.questionId,
-        customValue: customByQuestion[q.questionId] ?? '',
-      };
+        customValue,
+      }];
     });
 
     return base;
@@ -684,6 +692,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       <fieldset disabled={isExpired} className={isExpired ? 'opacity-60' : ''}>
       {questions.map((question, questionIndex) => {
         const method = question.methodType;
+        const isRequired = question.required !== false;
         const isOptionBased =
           method === METHOD_SINGLE_CHOICE || method === METHOD_MULTI_SELECT;
         const isNumeric = method === METHOD_NUMERIC_RANGE;
@@ -698,6 +707,9 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
               <h3 className="text-lg font-bold text-white mb-2 font-heading">
                 {questionIndex + 1}. {question.question}
               </h3>
+              {!isRequired && (
+                <p className="text-xs font-semibold text-slate-500 mb-2">Optional</p>
+              )}
               {questionIndex === 0 && (
                 <p className="text-sm text-slate-400 leading-relaxed">{details.description}</p>
               )}

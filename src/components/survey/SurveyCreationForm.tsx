@@ -38,6 +38,7 @@ interface Props {
 
 interface QuestionDraft {
   question: string;
+  required: boolean;
   methodType: MethodType;
   customMethodType: string;
   methodSchemaUri: string;
@@ -59,6 +60,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
   const [questions, setQuestions] = useState<QuestionDraft[]>([
     {
       question: '',
+      required: true,
       methodType: METHOD_SINGLE_CHOICE,
       customMethodType: DEFAULT_CUSTOM_METHOD_URN,
       methodSchemaUri: DEFAULT_FREETEXT_SCHEMA_URI,
@@ -107,6 +109,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
     const base: SurveyQuestion = {
       questionId: `q${index + 1}`,
       question: draft.question.trim(),
+      required: draft.required,
       methodType: isCustom ? draft.customMethodType.trim() : draft.methodType,
     };
 
@@ -150,6 +153,9 @@ export function SurveyCreationForm({ onCreated }: Props) {
     if (!title.trim()) errors.push('title is required');
     if (!description.trim()) errors.push('description is required');
     if (nonEmptyQuestions.length === 0) errors.push('at least one question is required');
+    if (!nonEmptyQuestions.some((q) => q.required)) {
+      errors.push('at least one question must be mandatory');
+    }
     const endEpoch = lifecycle.endEpoch;
     if (!Number.isInteger(endEpoch ?? NaN)) {
       errors.push('lifecycle.endEpoch is required');
@@ -162,11 +168,12 @@ export function SurveyCreationForm({ onCreated }: Props) {
     }
 
     questions.forEach((draft, index) => {
+      const question = buildQuestionFromDraft(draft, index);
       const details: SurveyDetails = {
         specVersion: SPEC_VERSION,
         title: title || 'tmp',
         description: description || 'tmp',
-        questions: [buildQuestionFromDraft(draft, index)],
+        questions: [{ ...question, required: true }],
       };
       const result = validateSurveyDetails(details);
       if (!result.valid) {
@@ -303,6 +310,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
       ...prev,
       {
         question: '',
+        required: true,
         methodType: METHOD_SINGLE_CHOICE,
         customMethodType: DEFAULT_CUSTOM_METHOD_URN,
         methodSchemaUri: DEFAULT_FREETEXT_SCHEMA_URI,
@@ -425,6 +433,20 @@ export function SurveyCreationForm({ onCreated }: Props) {
                         Remove
                       </button>
                     </div>
+                    <div className="flex items-center justify-between rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-2">
+                      <span className="text-xs font-semibold text-slate-300">Question is mandatory</span>
+                      <button
+                        type="button"
+                        onClick={() => updateQuestion(index, { required: !q.required })}
+                        className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors ${
+                          q.required
+                            ? 'bg-teal-500/15 border-teal-500/30 text-teal-300'
+                            : 'bg-slate-800/60 border-slate-700 text-slate-400'
+                        }`}
+                      >
+                        {q.required ? 'Mandatory' : 'Optional'}
+                      </button>
+                    </div>
 
                     <MethodTypeSelector
                       value={q.methodType}
@@ -491,7 +513,9 @@ export function SurveyCreationForm({ onCreated }: Props) {
             onReferenceActionChange={setReferenceAction}
             lifecycle={lifecycle}
             onLifecycleChange={(next) => {
-              setLifecycle(next);
+              if (next) {
+                setLifecycle(next);
+              }
               setLifecycleTouched(true);
             }}
             currentEpoch={currentEpoch}

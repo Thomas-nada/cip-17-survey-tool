@@ -31,6 +31,7 @@ function getQuestions(details: SurveyDetails): SurveyQuestion[] {
       questionId: 'q1',
       question: details.question,
       methodType: details.methodType,
+      required: true,
       options: details.options,
       maxSelections: details.maxSelections,
       numericConstraints: details.numericConstraints,
@@ -55,6 +56,7 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
   if (questions.length === 0) errors.push('questions is required');
 
   const questionIds = new Set<string>();
+  let hasRequiredQuestion = false;
   questions.forEach((q, idx) => {
     const prefix = `questions[${idx}]`;
     if (!q.questionId?.trim()) errors.push(`${prefix}.questionId is required`);
@@ -64,6 +66,7 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
       errors.push(`${prefix}.questionId must be unique`);
     }
     if (q.questionId) questionIds.add(q.questionId);
+    if (q.required !== false) hasRequiredQuestion = true;
 
     const method = q.methodType as MethodType;
     if (method === METHOD_SINGLE_CHOICE) {
@@ -128,6 +131,10 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
       }
     }
   });
+
+  if (!hasRequiredQuestion) {
+    errors.push('at least one question must be mandatory');
+  }
 
   // Optional field validation
   if (details.eligibility) {
@@ -228,7 +235,7 @@ export function validateSurveyResponse(
   const questions = getQuestions(survey);
   const questionById = new Map(questions.map((q) => [q.questionId, q]));
 
-  const answers: SurveyAnswer[] = response.answers && response.answers.length > 0
+  const answers: SurveyAnswer[] = response.answers !== undefined
     ? response.answers
     : [{
         questionId: questions[0]?.questionId ?? 'q1',
@@ -237,8 +244,8 @@ export function validateSurveyResponse(
         customValue: response.customValue,
       }];
 
-  if (answers.length === 0) {
-    errors.push('answers must be non-empty');
+  if (!Array.isArray(answers)) {
+    errors.push('answers must be an array');
     return { valid: false, errors };
   }
 
@@ -313,6 +320,41 @@ export function validateSurveyResponse(
       }
     } else if (!hasCustom) {
       errors.push(`${prefix}: free-text/custom answer must use customValue`);
+    }
+  }
+
+  for (const question of questions) {
+    const isRequired = question.required !== false;
+    if (!isRequired) continue;
+
+    if (!seenAnswerIds.has(question.questionId)) {
+      errors.push(`missing required answer for questionId "${question.questionId}"`);
+      continue;
+    }
+
+    const requiredAnswer = answers.find((a) => a.questionId === question.questionId);
+    if (!requiredAnswer) continue;
+
+    if (question.methodType === METHOD_SINGLE_CHOICE || question.methodType === METHOD_MULTI_SELECT) {
+      if (!requiredAnswer.selection || requiredAnswer.selection.length === 0) {
+        errors.push(`questionId "${question.questionId}" requires at least one selection`);
+      }
+      continue;
+    }
+
+    if (question.methodType === METHOD_NUMERIC_RANGE) {
+      if (requiredAnswer.numericValue === undefined) {
+        errors.push(`questionId "${question.questionId}" requires numericValue`);
+      }
+      continue;
+    }
+
+    if (requiredAnswer.customValue === undefined) {
+      errors.push(`questionId "${question.questionId}" requires customValue`);
+      continue;
+    }
+    if (typeof requiredAnswer.customValue === 'string' && requiredAnswer.customValue.trim().length === 0) {
+      errors.push(`questionId "${question.questionId}" requires non-empty customValue`);
     }
   }
 

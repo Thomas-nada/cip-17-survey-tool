@@ -39,6 +39,7 @@ export interface SurveyQuestion {
   questionId: string;
   question: string;
   methodType: MethodType;
+  required?: boolean;
   options?: string[];
   maxSelections?: number;
   numericConstraints?: NumericConstraints;

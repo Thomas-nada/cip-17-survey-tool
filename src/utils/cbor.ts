@@ -17,6 +17,7 @@ function questionToMap(question: SurveyQuestion): Map<string, unknown> {
   q.set('questionId', question.questionId);
   q.set('question', question.question);
   q.set('methodType', question.methodType);
+  if (question.required !== undefined) q.set('required', question.required);
   if (question.options !== undefined) q.set('options', question.options);
   if (question.maxSelections !== undefined) q.set('maxSelections', question.maxSelections);
   if (question.numericConstraints !== undefined) {
