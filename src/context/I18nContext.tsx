@@ -173,7 +173,7 @@ const en: Record<string, string> = {
   'create.optionalFields': 'Optional Fields',
   'create.eligibilityRoles': 'Eligibility Roles',
   'create.voteWeighting': 'Vote Weighting',
-  'create.defaultCredentialBased': 'Default: CredentialBased (1 vote per credential)',
+  'create.defaultCredentialBased': 'Default: ADA Holder eligibility + StakeBased weighting',
   'create.govActionReference': 'Governance Action Reference',
   'create.transactionIdPlaceholder': 'Transaction ID (64 hex chars)',
   'create.actionIndex': 'Action Index',

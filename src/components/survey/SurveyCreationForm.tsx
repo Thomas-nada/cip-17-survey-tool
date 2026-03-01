@@ -68,8 +68,8 @@ export function SurveyCreationForm({ onCreated }: Props) {
       numericConstraints: { minValue: 0, maxValue: 100 },
     },
   ]);
-  const [eligibility, setEligibility] = useState<EligibilityRole[] | undefined>();
-  const [voteWeighting, setVoteWeighting] = useState<VoteWeighting | undefined>();
+  const [eligibility, setEligibility] = useState<EligibilityRole[] | undefined>(['Stakeholder']);
+  const [voteWeighting, setVoteWeighting] = useState<VoteWeighting | undefined>('StakeBased');
   const [referenceAction, setReferenceAction] = useState<ReferenceAction | undefined>();
   const [lifecycle, setLifecycle] = useState<Lifecycle | undefined>();
   const [currentEpoch, setCurrentEpoch] = useState<number | null>(null);
