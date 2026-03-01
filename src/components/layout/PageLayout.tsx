@@ -14,7 +14,7 @@ const LOADING_LINES = [
 ];
 
 export function PageLayout({ children }: { children: ReactNode }) {
-  const { state } = useApp();
+  const { state, mode, setMode } = useApp();
   const { t } = useI18n();
   const [showErrorDetails, setShowErrorDetails] = useState(false);
   const [loadingLineIndex, setLoadingLineIndex] = useState(0);
@@ -58,6 +58,27 @@ export function PageLayout({ children }: { children: ReactNode }) {
       />
       <Header />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {mode === 'mainnet' && (
+          <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 md:p-8 animate-fadeIn">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-300">
+              <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
+              Mainnet
+            </div>
+            <h2 className="mt-4 font-heading text-2xl text-white">
+              Mainnet support coming soon
+            </h2>
+            <p className="mt-2 text-sm text-slate-300 max-w-2xl">
+              Mainnet mode is temporarily disabled while the production rollout is finalized. Please use testnet for now.
+            </p>
+            <button
+              type="button"
+              onClick={() => setMode('testnet')}
+              className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-sm font-semibold transition-colors"
+            >
+              Switch to Testnet
+            </button>
+          </div>
+        )}
         {showSurveyLoader && (
           <div className="mb-6 rounded-2xl border border-teal-500/25 bg-slate-900/50 p-6 md:p-8 animate-fadeIn">
             <div className="inline-flex items-center gap-2 rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-teal-300">
@@ -95,7 +116,7 @@ export function PageLayout({ children }: { children: ReactNode }) {
             )}
           </div>
         )}
-        {children}
+        {mode === 'mainnet' ? null : children}
       </main>
       {/* Footer */}
       <footer className="border-t border-slate-800/50 mt-12">
