@@ -18,6 +18,9 @@ export function AboutPage() {
           This tool creates surveys and responses as transaction metadata under label <span className="font-code text-teal-300">17</span>.
           It is designed so survey rules are machine-readable, responses are verifiable, and results can be independently recomputed.
         </p>
+        <p className="mt-3 text-sm text-amber-300/90">
+          Preview network is currently live. Mainnet mode is shown in the UI but temporarily disabled until production rollout is finalized.
+        </p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
@@ -28,7 +31,8 @@ export function AboutPage() {
           </div>
           <p className="text-sm text-slate-300 leading-relaxed">
             A survey is published with <span className="font-code">surveyDetails</span> including title, description, and one or more questions.
-            Each question carries its own method type (single choice, multi-select, numeric range, or free-text/custom schema).
+            Each question carries its own method type (single choice, multi-select, numeric range, or free-text/custom schema), and creators can mark each question as mandatory or optional.
+            At least one question must be mandatory.
           </p>
         </div>
         <div className="bg-slate-800/20 border border-slate-700/30 rounded-xl p-5">
@@ -48,7 +52,8 @@ export function AboutPage() {
           </div>
           <p className="text-sm text-slate-300 leading-relaxed">
             A vote is submitted as <span className="font-code">surveyResponse</span> pointing to both <span className="font-code">surveyTxId</span> and <span className="font-code">surveyHash</span>.
-            Answers are stored per question in <span className="font-code">answers[]</span>. Free-text accepts normal text and Markdown.
+            Answers are stored per question in <span className="font-code">answers[]</span>, so one survey can contain mixed question types.
+            Free-text responses support Markdown, including write/preview in the voting UI.
           </p>
         </div>
         <div className="bg-slate-800/20 border border-slate-700/30 rounded-xl p-5">
@@ -64,6 +69,19 @@ export function AboutPage() {
       </div>
 
       <div className="bg-slate-800/20 border border-slate-700/30 rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-2 text-slate-200">
+          <CheckCircle2 className="w-4 h-4" />
+          <h3 className="text-sm font-semibold uppercase tracking-wide">Creation Rules In This Tool</h3>
+        </div>
+        <ul className="text-sm text-slate-300 space-y-2 leading-relaxed list-disc pl-5">
+          <li>End epoch is required and must be between current epoch +1 and +10 (default: +6).</li>
+          <li>Eligibility roles are required (default: ADA Holder / Stakeholder).</li>
+          <li>Vote weighting is required (default: Stake-based).</li>
+          <li>If a survey has expired by epoch, voting is blocked and status shows Expired.</li>
+        </ul>
+      </div>
+
+      <div className="bg-slate-800/20 border border-slate-700/30 rounded-xl p-5">
         <div className="flex items-center gap-2 mb-2 text-sky-300">
           <BarChart3 className="w-4 h-4" />
           <h3 className="text-sm font-semibold uppercase tracking-wide">Tally Rules</h3>
@@ -72,6 +90,7 @@ export function AboutPage() {
           <li>Latest valid response per voter is counted (older valid responses are superseded).</li>
           <li>Weighting can be credential-based (1 per counted voter) or stake-based (ADA-weighted where configured).</li>
           <li>Tallies are computed per question, supporting mixed question types in one survey.</li>
+          <li>Optional questions can be skipped; mandatory questions must be answered.</li>
           <li>Audit exports include per-response status and a snapshot hash to support reproducibility.</li>
         </ul>
       </div>
@@ -85,8 +104,12 @@ export function AboutPage() {
       "specVersion": "...",
       "title": "...",
       "description": "...",
+      "eligibility": ["Stakeholder"],
+      "voteWeighting": "StakeBased",
+      "lifecycle": { "endEpoch": 1234 },
       "questions": [
-        { "questionId": "q1", "question": "...", "methodType": "..." }
+        { "questionId": "q1", "question": "...", "required": true, "methodType": "..." },
+        { "questionId": "q2", "question": "...", "required": false, "methodType": "urn:cardano:poll-method:custom:v1" }
       ]
     }
   }
@@ -100,7 +123,8 @@ export function AboutPage() {
       "surveyTxId": "...",
       "surveyHash": "...",
       "answers": [
-        { "questionId": "q1", "selection": [0] }
+        { "questionId": "q1", "selection": [0] },
+        { "questionId": "q2", "customValue": "Markdown **text**" }
       ]
     }
   }
@@ -127,4 +151,3 @@ export function AboutPage() {
     </div>
   );
 }
-
