@@ -203,6 +203,7 @@ interface Props {
 }
 
 type OptionSortMode = 'leading' | 'name' | 'votes' | 'percentage';
+type RoleFilterValue = 'all' | EligibilityRole;
 
 export function TallyDashboard({ survey }: Props) {
   const { state, blockfrostClient, mode } = useApp();
@@ -217,8 +218,24 @@ export function TallyDashboard({ survey }: Props) {
     () => Object.keys(configuredRoleWeighting) as EligibilityRole[],
     [configuredRoleWeighting]
   );
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState<RoleFilterValue>('all');
+  const activeRoles = useMemo(
+    () => (selectedRoleFilter === 'all' ? requiredRoles : [selectedRoleFilter]),
+    [selectedRoleFilter, requiredRoles]
+  );
+  const filteredResponses = useMemo(
+    () => (selectedRoleFilter === 'all' ? responses : responses.filter((r) => r.responderRole === selectedRoleFilter)),
+    [responses, selectedRoleFilter]
+  );
+  const needsStakeMap = useMemo(
+    () => activeRoles.some((role) => {
+      const mode = configuredRoleWeighting[role];
+      return mode === 'StakeBased' || mode === 'PledgeBased';
+    }),
+    [activeRoles, configuredRoleWeighting]
+  );
   const weighting = (Object.values(configuredRoleWeighting)[0] ?? 'CredentialBased');
-  const isStakeBased = weighting === 'StakeBased' || weighting === 'PledgeBased';
+  const isStakeBased = needsStakeMap;
   const [showAllResponses, setShowAllResponses] = useState(false);
 
   // Stake map: responseCredential → lovelace (for StakeBased weighting)
@@ -252,6 +269,17 @@ export function TallyDashboard({ survey }: Props) {
   const [isLightTheme, setIsLightTheme] = useState(
     () => document.documentElement.getAttribute('data-theme') === 'light'
   );
+
+  useEffect(() => {
+    if (selectedRoleFilter === 'all') return;
+    if (!requiredRoles.includes(selectedRoleFilter)) {
+      setSelectedRoleFilter('all');
+    }
+  }, [requiredRoles, selectedRoleFilter]);
+
+  useEffect(() => {
+    setShowAllResponses(false);
+  }, [selectedRoleFilter]);
   const questions: SurveyQuestion[] = useMemo(() => {
     if (survey.details.questions && survey.details.questions.length > 0) {
       return survey.details.questions;
@@ -301,7 +329,7 @@ export function TallyDashboard({ survey }: Props) {
 
   // Fetch stake amounts for unique voters when StakeBased
   useEffect(() => {
-    if (!isStakeBased || responses.length === 0 || !isOnChainMode || !blockfrostClient) {
+    if (!isStakeBased || filteredResponses.length === 0 || !isOnChainMode || !blockfrostClient) {
       setStakeMap(new Map());
       return;
     }
@@ -311,7 +339,7 @@ export function TallyDashboard({ survey }: Props) {
 
     (async () => {
       const map = new Map<string, bigint>();
-      for (const resp of responses) {
+      for (const resp of filteredResponses) {
         if (cancelled) return;
         try {
           const cred = resp.responseCredential;
@@ -367,12 +395,12 @@ export function TallyDashboard({ survey }: Props) {
     })();
 
     return () => { cancelled = true; };
-  }, [isStakeBased, responses, isOnChainMode, blockfrostClient]);
+  }, [isStakeBased, filteredResponses, isOnChainMode, blockfrostClient]);
 
   // Role-aware display voting power for the response list:
   // DRep/SPO => delegated power, CC => 1 vote, Stakeholder => wallet amount.
   useEffect(() => {
-    if (responses.length === 0 || !isOnChainMode || !blockfrostClient) {
+    if (filteredResponses.length === 0 || !isOnChainMode || !blockfrostClient) {
       setDisplayVotingPower(new Map());
       setOneVoteCredentials(new Set());
       return;
@@ -383,7 +411,7 @@ export function TallyDashboard({ survey }: Props) {
     const hasCCRole = requiredRoles.includes('CC');
     const hasStakeholderRole = requiredRoles.includes('Stakeholder');
     const unique = new Map<string, { credential: string; voterAddress?: string; txId: string }>();
-    for (const resp of responses) {
+    for (const resp of filteredResponses) {
       if (!unique.has(resp.responseCredential)) {
         unique.set(resp.responseCredential, {
           credential: resp.responseCredential,
@@ -513,11 +541,11 @@ export function TallyDashboard({ survey }: Props) {
     })();
 
     return () => { cancelled = true; };
-  }, [responses, isOnChainMode, blockfrostClient, requiredRoles]);
+  }, [filteredResponses, isOnChainMode, blockfrostClient, requiredRoles]);
 
   // Resolve a role badge per credential for response-list display.
   useEffect(() => {
-    if (responses.length === 0 || !isOnChainMode || !blockfrostClient) {
+    if (filteredResponses.length === 0 || !isOnChainMode || !blockfrostClient) {
       setResolvedRoleByCredential(new Map());
       setResolvedCcColdByCredential(new Map());
       setResolvedSpoPoolByCredential(new Map());
@@ -531,7 +559,7 @@ export function TallyDashboard({ survey }: Props) {
 
     let cancelled = false;
     const unique = new Map<string, { credential: string; voterAddress?: string }>();
-    for (const resp of responses) {
+    for (const resp of filteredResponses) {
       if (!unique.has(resp.responseCredential)) {
         unique.set(resp.responseCredential, {
           credential: resp.responseCredential,
@@ -602,12 +630,12 @@ export function TallyDashboard({ survey }: Props) {
     })();
 
     return () => { cancelled = true; };
-  }, [responses, isOnChainMode, blockfrostClient, requiredRoles]);
+  }, [filteredResponses, isOnChainMode, blockfrostClient, requiredRoles]);
 
   // UI fallback: if a stored credential is still addr..., resolve to stake...
   // so SPO/stake identities are displayed consistently in the response table.
   useEffect(() => {
-    if (!isOnChainMode || !blockfrostClient || responses.length === 0) {
+    if (!isOnChainMode || !blockfrostClient || filteredResponses.length === 0) {
       setResolvedDisplayCredentialByTx(new Map());
       return;
     }
@@ -615,7 +643,7 @@ export function TallyDashboard({ survey }: Props) {
     let cancelled = false;
     (async () => {
       const next = new Map<string, string>();
-      for (const resp of responses) {
+      for (const resp of filteredResponses) {
         const cred = resp.responseCredential;
         if (!cred.startsWith('addr')) continue;
         try {
@@ -634,31 +662,120 @@ export function TallyDashboard({ survey }: Props) {
     })();
 
     return () => { cancelled = true; };
-  }, [responses, isOnChainMode, blockfrostClient]);
+  }, [filteredResponses, isOnChainMode, blockfrostClient]);
 
   const tally = useMemo(() => {
-    if (responses.length === 0) return null;
     return tallySurveyResponses(
       survey.details,
-      responses,
+      filteredResponses,
       weighting,
       isStakeBased ? stakeMap : undefined
     );
-  }, [survey.details, responses, weighting, isStakeBased, stakeMap]);
+  }, [survey.details, filteredResponses, weighting, isStakeBased, stakeMap]);
 
-  if (!tally || responses.length === 0) {
-    return (
-      <div className="bg-slate-800/20 border border-slate-700/30 rounded-2xl p-12 text-center animate-fadeIn">
-        <div className="inline-flex p-4 bg-slate-800/50 rounded-2xl mb-4">
-          <BarChart3 className="w-10 h-10 text-slate-600" />
-        </div>
-        <p className="text-slate-400 font-medium mb-1">{t('results.noResponsesYet')}</p>
-        <p className="text-sm text-slate-500">
-          {t('results.submitToSee')}
-        </p>
-      </div>
-    );
-  }
+  const displayTally = useMemo(() => {
+    if (!tally) return null;
+    if (selectedRoleFilter !== 'all' || tally.roleTallies.length <= 1) return tally;
+
+    const mergedByQuestion = new Map<string, {
+      questionId: string;
+      question: string;
+      methodType: SurveyQuestion['methodType'];
+      optionTallies?: { index: number; label: string; count: number; weight: number }[];
+      numericValues?: number[];
+      numericBins?: Map<string, number>;
+      customTexts?: string[];
+    }>();
+
+    for (const q of questions) {
+      mergedByQuestion.set(q.questionId, {
+        questionId: q.questionId,
+        question: q.question,
+        methodType: q.methodType,
+        optionTallies: (q.options ?? []).map((label, index) => ({ index, label, count: 0, weight: 0 })),
+        numericValues: [],
+        numericBins: new Map<string, number>(),
+        customTexts: [],
+      });
+    }
+
+    let totalWeight = 0;
+    for (const roleTally of tally.roleTallies) {
+      totalWeight += roleTally.totalWeight;
+      for (const qt of roleTally.questionTallies) {
+        const target = mergedByQuestion.get(qt.questionId);
+        if (!target) continue;
+
+        if (target.optionTallies && qt.optionTallies) {
+          for (let i = 0; i < target.optionTallies.length; i++) {
+            const source = qt.optionTallies[i];
+            if (!source) continue;
+            target.optionTallies[i].count += source.count;
+            target.optionTallies[i].weight += source.weight;
+          }
+        }
+
+        if (qt.numericTally) {
+          target.numericValues?.push(...qt.numericTally.values);
+          for (const bin of qt.numericTally.bins) {
+            const prev = target.numericBins?.get(bin.range) ?? 0;
+            target.numericBins?.set(bin.range, prev + bin.count);
+          }
+        }
+
+        if (qt.customTexts && qt.customTexts.length > 0) {
+          target.customTexts?.push(...qt.customTexts);
+        }
+      }
+    }
+
+    const mergedQuestions = Array.from(mergedByQuestion.values()).map((q) => {
+      if (q.methodType === METHOD_NUMERIC_RANGE) {
+        const values = q.numericValues ?? [];
+        const sorted = [...values].sort((a, b) => a - b);
+        const mean = values.length > 0 ? values.reduce((sum, v) => sum + v, 0) / values.length : 0;
+        const median = values.length === 0
+          ? 0
+          : values.length % 2 === 0
+            ? (sorted[values.length / 2 - 1] + sorted[values.length / 2]) / 2
+            : sorted[Math.floor(values.length / 2)];
+        const min = values.length > 0 ? sorted[0] : 0;
+        const max = values.length > 0 ? sorted[sorted.length - 1] : 0;
+        const bins = Array.from(q.numericBins?.entries() ?? []).map(([range, count]) => ({ range, count }));
+        return {
+          questionId: q.questionId,
+          question: q.question,
+          methodType: q.methodType,
+          numericTally: { values, mean, median, min, max, bins },
+        };
+      }
+
+      if (q.methodType === METHOD_SINGLE_CHOICE || q.methodType === METHOD_MULTI_SELECT) {
+        return {
+          questionId: q.questionId,
+          question: q.question,
+          methodType: q.methodType,
+          optionTallies: q.optionTallies,
+        };
+      }
+
+      return {
+        questionId: q.questionId,
+        question: q.question,
+        methodType: q.methodType,
+        customTexts: q.customTexts,
+      };
+    });
+
+    const firstQuestion = mergedQuestions[0];
+    return {
+      ...tally,
+      totalWeight,
+      questionTallies: mergedQuestions,
+      optionTallies: firstQuestion?.optionTallies,
+      numericTally: firstQuestion?.numericTally,
+    };
+  }, [tally, selectedRoleFilter, questions]);
 
   const method = questions[0]?.methodType;
   const isOptionBased =
@@ -676,11 +793,11 @@ export function TallyDashboard({ survey }: Props) {
   const tooltipText = isLightTheme ? '#0f172a' : '#f1f5f9';
 
   const displayedResponses = showAllResponses
-    ? responses
-    : responses.slice(0, RESPONSES_PER_PAGE);
+    ? filteredResponses
+    : filteredResponses.slice(0, RESPONSES_PER_PAGE);
 
   const latestCountedByVoter = useMemo(() => {
-    const ordered = [...responses]
+    const ordered = [...filteredResponses]
       .filter((r) => r.identityVerified !== false)
       .sort((a, b) => {
       if (a.slot !== b.slot) return a.slot - b.slot;
@@ -693,10 +810,10 @@ export function TallyDashboard({ survey }: Props) {
       latest.set(voterKey, resp.txId);
     }
     return latest;
-  }, [responses]);
+  }, [filteredResponses]);
 
   const responseAuditRows = useMemo(() => {
-    return responses.map((resp) => {
+    return filteredResponses.map((resp) => {
       const voterKey = `${resp.responderRole}|${resp.responseCredential}`;
       const unverified = resp.identityVerified === false;
       const superseded = latestCountedByVoter.get(voterKey) !== resp.txId;
@@ -720,26 +837,27 @@ export function TallyDashboard({ survey }: Props) {
         reason: resp.identityVerificationReason ?? '',
       };
     });
-  }, [responses, latestCountedByVoter, displayVotingPower]);
+  }, [filteredResponses, latestCountedByVoter, displayVotingPower]);
 
   const tallySnapshotHash = useMemo(() => {
+    if (!displayTally) return '';
     const counted = responseAuditRows
       .filter((r) => r.counted)
       .sort((a, b) => a.slot - b.slot || a.txIndexInBlock - b.txIndexInBlock || a.txId.localeCompare(b.txId));
     const canonical = JSON.stringify({
       surveyTxId: survey.surveyTxId,
       surveyHash: survey.surveyHash,
-      weighting: tally.weighting,
-      totalResponses: tally.totalResponses,
-      totalWeight: tally.totalWeight,
+      weighting: displayTally.weighting,
+      totalResponses: displayTally.totalResponses,
+      totalWeight: displayTally.totalWeight,
       counted,
-      questionTallies: tally.questionTallies,
-      optionTallies: tally.optionTallies,
-      numericTally: tally.numericTally,
+      questionTallies: displayTally.questionTallies,
+      optionTallies: displayTally.optionTallies,
+      numericTally: displayTally.numericTally,
     });
     const bytes = new TextEncoder().encode(canonical);
     return blake.blake2bHex(bytes, undefined, 32);
-  }, [responseAuditRows, survey.surveyTxId, survey.surveyHash, tally]);
+  }, [responseAuditRows, survey.surveyTxId, survey.surveyHash, displayTally]);
 
   const exportAuditJson = () => {
     const payload = {
@@ -772,22 +890,22 @@ export function TallyDashboard({ survey }: Props) {
   };
 
   // Find the leading option (by weight for StakeBased, by count otherwise)
-  const leadingOption = isOptionBased && tally.optionTallies
-    ? tally.optionTallies.reduce((max, t) => {
+  const leadingOption = isOptionBased && displayTally?.optionTallies
+    ? displayTally.optionTallies.reduce((max, t) => {
         const metric = isStakeBased ? t.weight : t.count;
         const maxMetric = isStakeBased ? max.weight : max.count;
         return metric > maxMetric ? t : max;
-      }, tally.optionTallies[0])
+      }, displayTally.optionTallies[0])
     : null;
   const optionTotalMetric = useMemo(() => {
-    if (!isOptionBased || !tally.optionTallies) return 0;
+    if (!isOptionBased || !displayTally?.optionTallies) return 0;
     return isStakeBased
-      ? tally.optionTallies.reduce((sum, x) => sum + x.weight, 0)
-      : tally.optionTallies.reduce((sum, x) => sum + x.count, 0);
-  }, [isOptionBased, tally.optionTallies, isStakeBased]);
+      ? displayTally.optionTallies.reduce((sum, x) => sum + x.weight, 0)
+      : displayTally.optionTallies.reduce((sum, x) => sum + x.count, 0);
+  }, [isOptionBased, displayTally, isStakeBased]);
   const sortedOptionTallies = useMemo(() => {
-    if (!isOptionBased || !tally.optionTallies) return [];
-    const items = [...tally.optionTallies];
+    if (!isOptionBased || !displayTally?.optionTallies) return [];
+    const items = [...displayTally.optionTallies];
     if (optionSortMode === 'name') {
       items.sort((a, b) => a.label.localeCompare(b.label));
       return items;
@@ -817,7 +935,21 @@ export function TallyDashboard({ survey }: Props) {
       return bMetric - aMetric || b.count - a.count || a.label.localeCompare(b.label);
     });
     return items;
-  }, [isOptionBased, tally.optionTallies, optionSortMode, isStakeBased, optionTotalMetric, leadingOption]);
+  }, [isOptionBased, displayTally, optionSortMode, isStakeBased, optionTotalMetric, leadingOption]);
+
+  if (!displayTally) {
+    return (
+      <div className="bg-slate-800/20 border border-slate-700/30 rounded-2xl p-12 text-center animate-fadeIn">
+        <div className="inline-flex p-4 bg-slate-800/50 rounded-2xl mb-4">
+          <BarChart3 className="w-10 h-10 text-slate-600" />
+        </div>
+        <p className="text-slate-400 font-medium mb-1">{t('results.noResponsesYet')}</p>
+        <p className="text-sm text-slate-500">
+          {t('results.submitToSee')}
+        </p>
+      </div>
+    );
+  }
 
   const renderResponseValue = (resp: { answers?: SurveyAnswer[]; selection?: number[]; numericValue?: number; customValue?: unknown }) => {
     const answers = resp.answers && resp.answers.length > 0
@@ -889,6 +1021,21 @@ export function TallyDashboard({ survey }: Props) {
           <p className="text-xs text-sky-400">Loading role-based voting power…</p>
         </div>
       )}
+      {requiredRoles.length > 1 && (
+        <div className="flex items-center justify-between gap-3 p-3 bg-slate-800/25 border border-slate-700/30 rounded-xl">
+          <p className="text-xs text-slate-400 font-medium">Role filter</p>
+          <select
+            value={selectedRoleFilter}
+            onChange={(e) => setSelectedRoleFilter(e.target.value as RoleFilterValue)}
+            className="option-sort-select text-xs rounded-md bg-slate-900/40 border border-slate-700/40 text-slate-300 px-2 py-1"
+          >
+            <option value="all">All roles</option>
+            {requiredRoles.map((role) => (
+              <option key={role} value={role}>{t(`role.${role}`)}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Stats row */}
       <div className={`grid grid-cols-2 ${isStakeBased ? 'md:grid-cols-5' : 'md:grid-cols-4'} gap-3`}>
@@ -897,7 +1044,7 @@ export function TallyDashboard({ survey }: Props) {
             <TrendingUp className="w-4 h-4 text-teal-400" />
             <span className="text-xs text-slate-400 font-medium">{t('results.totalResponses')}</span>
           </div>
-          <p className="text-2xl font-bold text-white font-heading">{tally.totalResponses.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-white font-heading">{displayTally.totalResponses.toLocaleString()}</p>
         </div>
         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -905,7 +1052,7 @@ export function TallyDashboard({ survey }: Props) {
             <span className="text-xs text-slate-400 font-medium">{t('results.uniqueVoters')}</span>
           </div>
           <p className="text-2xl font-bold text-white font-heading">
-            {tally.uniqueCredentials.toLocaleString()}
+            {displayTally.uniqueCredentials.toLocaleString()}
           </p>
         </div>
         <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4">
@@ -924,19 +1071,19 @@ export function TallyDashboard({ survey }: Props) {
               <span className="text-xs text-slate-400 font-medium">{t('results.totalVotingPower')}</span>
             </div>
             <p className="text-lg font-bold text-white font-code">
-              {formatAda(tally.totalWeight)}
+              {formatAda(displayTally.totalWeight)}
             </p>
             <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">ADA</p>
           </div>
         )}
-        {isNumeric && tally.numericTally && (
+        {isNumeric && displayTally.numericTally && (
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-2">
               <Hash className="w-4 h-4 text-amber-400" />
               <span className="text-xs text-slate-400 font-medium">{t('results.median')}</span>
             </div>
             <p className="text-2xl font-bold font-code text-white">
-              {tally.numericTally.median}
+              {displayTally.numericTally.median}
             </p>
           </div>
         )}
@@ -987,7 +1134,7 @@ export function TallyDashboard({ survey }: Props) {
       </div>
 
       {/* Option-based chart */}
-      {isOptionBased && tally.optionTallies && (
+      {isOptionBased && displayTally.optionTallies && (
         <div className="tally-chart-card bg-slate-800/30 border border-slate-700/30 rounded-xl p-6">
           <div className="flex items-center justify-between mb-5">
             <h4 className="text-sm font-semibold text-slate-300 font-heading">
@@ -1069,7 +1216,7 @@ export function TallyDashboard({ survey }: Props) {
       )}
 
       {/* Numeric results */}
-      {isNumeric && tally.numericTally && (
+      {isNumeric && displayTally.numericTally && (
         <div className="tally-chart-card bg-slate-800/30 border border-slate-700/30 rounded-xl p-6">
           <h4 className="text-sm font-semibold text-slate-300 mb-5 font-heading">
             Value Distribution
@@ -1078,10 +1225,10 @@ export function TallyDashboard({ survey }: Props) {
           {/* Stats */}
           <div className="grid grid-cols-4 gap-3 mb-6">
             {[
-              { label: 'Mean', value: tally.numericTally.mean.toFixed(1), color: 'text-teal-400' },
-              { label: 'Median', value: tally.numericTally.median.toFixed(1), color: 'text-emerald-400' },
-              { label: 'Min', value: tally.numericTally.min, color: 'text-slate-400' },
-              { label: 'Max', value: tally.numericTally.max, color: 'text-slate-400' },
+              { label: 'Mean', value: displayTally.numericTally.mean.toFixed(1), color: 'text-teal-400' },
+              { label: 'Median', value: displayTally.numericTally.median.toFixed(1), color: 'text-emerald-400' },
+              { label: 'Min', value: displayTally.numericTally.min, color: 'text-slate-400' },
+              { label: 'Max', value: displayTally.numericTally.max, color: 'text-slate-400' },
             ].map(({ label, value, color }) => (
               <div
                 key={label}
@@ -1096,9 +1243,9 @@ export function TallyDashboard({ survey }: Props) {
           </div>
 
           {/* Histogram */}
-          {tally.numericTally.bins.length > 0 && (
+          {displayTally.numericTally.bins.length > 0 && (
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={tally.numericTally.bins}>
+              <BarChart data={displayTally.numericTally.bins}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
                 <XAxis
                   dataKey="range"
@@ -1133,7 +1280,7 @@ export function TallyDashboard({ survey }: Props) {
             {t('results.individualResponses')}
           </h4>
           <span className="text-xs text-slate-500 font-code">
-            {t('results.total', { count: responses.length.toLocaleString() })}
+            {t('results.total', { count: filteredResponses.length.toLocaleString() })}
           </span>
         </div>
         <div className="overflow-x-auto">
@@ -1296,7 +1443,7 @@ export function TallyDashboard({ survey }: Props) {
         </div>
 
         {/* Show more / less */}
-        {responses.length > RESPONSES_PER_PAGE && (
+        {filteredResponses.length > RESPONSES_PER_PAGE && (
           <div className="px-5 py-3 border-t border-slate-700/30">
             <button
               onClick={() => setShowAllResponses(!showAllResponses)}
@@ -1310,7 +1457,7 @@ export function TallyDashboard({ survey }: Props) {
               ) : (
                 <>
                   <ChevronDown className="w-3.5 h-3.5" />
-                  {t('results.showAllResponses', { count: responses.length })}
+                  {t('results.showAllResponses', { count: filteredResponses.length })}
                 </>
               )}
             </button>
