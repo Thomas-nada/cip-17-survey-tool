@@ -19,7 +19,7 @@ import { useI18n } from '../context/I18nContext.tsx';
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { state, mode } = useApp();
+  const { state, mode, currentEpoch } = useApp();
   const { t } = useI18n();
 
   const surveyCount = state.surveys.length;
@@ -33,8 +33,15 @@ export function DashboardPage() {
       .map((r) => r.voterAddress ?? r.responseCredential)
   ).size;
 
-  // Get the top 3 most active surveys (by response count)
+  // Get the top 3 most active non-expired surveys (by response count)
   const featuredSurveys = [...state.surveys]
+    .filter((s) => {
+      const endEpoch = s.details.lifecycle?.endEpoch;
+      if (typeof endEpoch !== 'number' || typeof currentEpoch !== 'number') {
+        return true;
+      }
+      return currentEpoch <= endEpoch;
+    })
     .map((s) => ({
       survey: s,
       count: state.responses.get(s.surveyTxId)?.length ?? 0,
