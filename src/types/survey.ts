@@ -12,7 +12,8 @@ export type MethodType = BuiltinMethodType | string;
 
 // ─── Eligibility & Weighting ────────────────────────────────────────
 export type EligibilityRole = 'DRep' | 'SPO' | 'CC' | 'Stakeholder';
-export type VoteWeighting = 'StakeBased' | 'CredentialBased';
+export type VoteWeighting = 'StakeBased' | 'CredentialBased' | 'PledgeBased';
+export type RoleWeighting = Partial<Record<EligibilityRole, VoteWeighting>>;
 
 // ─── Nested Objects ─────────────────────────────────────────────────
 export interface NumericConstraints {
@@ -39,7 +40,6 @@ export interface SurveyQuestion {
   questionId: string;
   question: string;
   methodType: MethodType;
-  required?: boolean;
   options?: string[];
   maxSelections?: number;
   numericConstraints?: NumericConstraints;
@@ -53,9 +53,10 @@ export interface SurveyDetails {
   specVersion: string;
   title: string;
   description: string;
-  // New schema
-  questions?: SurveyQuestion[];
-  // Legacy single-question schema (kept for backward compatibility while reading chain history)
+  questions: SurveyQuestion[];
+  roleWeighting: RoleWeighting;
+  endEpoch: number;
+  // Legacy read compatibility only
   question?: string;
   methodType?: MethodType;
   options?: string[];
@@ -81,19 +82,16 @@ export interface SurveyAnswer {
 export interface SurveyResponse {
   specVersion: string;
   surveyTxId: string;
-  surveyHash: string;
-  /** Canonical voter identifier, e.g. DRep ID or wallet address */
+  answers: SurveyAnswer[];
+  // Legacy read compatibility only
+  surveyHash?: string;
   responseCredential?: string;
-  /** Optional cryptographic identity proof (CLI / non-hot-wallet flows) */
   proof?: {
     message: string;
     key: string;
     signature: string;
     scheme?: string;
   };
-  // New schema
-  answers?: SurveyAnswer[];
-  // Legacy single-answer schema
   selection?: number[];
   numericValue?: number;
   customValue?: unknown;
@@ -124,6 +122,7 @@ export interface StoredSurvey {
 
 export interface StoredResponse {
   txId: string;
+  responderRole: EligibilityRole;
   /** Canonical credential used for deduplication/tally display */
   responseCredential: string;
   /** Claimed credential from metadata payload (untrusted) */
@@ -136,14 +135,17 @@ export interface StoredResponse {
   identityVerificationReason?: string;
   /** UTC timestamp in milliseconds since epoch */
   timestampMs?: number;
+  /** Optional immediate snapshot from submit-time UI (lovelace string) */
+  submitPowerLovelace?: string;
   surveyTxId: string;
-  surveyHash: string;
+  surveyHash?: string;
   answers?: SurveyAnswer[];
   selection?: number[];
   numericValue?: number;
   customValue?: unknown;
   slot: number;
   txIndexInBlock: number;
+  metadataPosition?: number;
 }
 
 // ─── Tally Results ──────────────────────────────────────────────────
@@ -176,11 +178,17 @@ export interface TallyResult {
   surveyTxId: string;
   totalResponses: number;
   uniqueCredentials: number;
+  roleTallies: {
+    role: EligibilityRole;
+    weighting: VoteWeighting;
+    totalWeight: number;
+    responses: number;
+    questionTallies: QuestionTally[];
+  }[];
+  // Backward-compatible aliases (first role)
   weighting: VoteWeighting;
-  /** Total voting weight (ADA for StakeBased, count for CredentialBased) */
   totalWeight: number;
-  // New schema
-  questionTallies?: QuestionTally[];
+  questionTallies: QuestionTally[];
   // Legacy single-question fields
   optionTallies?: OptionTally[];
   numericTally?: NumericTally;

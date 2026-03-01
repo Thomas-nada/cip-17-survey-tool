@@ -29,29 +29,10 @@ export function MetadataPreview({ details, msg, isValid }: Props) {
         specVersion: details.specVersion,
         title: details.title,
         description: details.description,
+        questions: details.questions,
+        roleWeighting: details.roleWeighting,
+        endEpoch: details.endEpoch,
       };
-      if (details.questions && details.questions.length > 0) {
-        clean.questions = details.questions;
-      } else {
-        clean.question = details.question;
-        clean.methodType = details.methodType;
-      }
-      if (details.options) clean.options = details.options;
-      if (details.maxSelections !== undefined)
-        clean.maxSelections = details.maxSelections;
-      if (details.numericConstraints)
-        clean.numericConstraints = details.numericConstraints;
-      if (details.methodSchemaUri)
-        clean.methodSchemaUri = details.methodSchemaUri;
-      if (details.hashAlgorithm)
-        clean.hashAlgorithm = details.hashAlgorithm;
-      if (details.methodSchemaHash)
-        clean.methodSchemaHash = details.methodSchemaHash;
-      if (details.eligibility) clean.eligibility = details.eligibility;
-      if (details.voteWeighting) clean.voteWeighting = details.voteWeighting;
-      if (details.referenceAction)
-        clean.referenceAction = details.referenceAction;
-      if (details.lifecycle) clean.lifecycle = details.lifecycle;
 
       const fullPayload: Record<string, unknown> = {
         [METADATA_LABEL]: {

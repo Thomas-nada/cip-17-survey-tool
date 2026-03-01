@@ -13,6 +13,7 @@ export interface BlockfrostBlockInfo {
   slot: number;
   height: number;
   time: number;
+  epoch?: number;
 }
 
 export interface BlockfrostEpochInfo {
@@ -334,6 +335,11 @@ export class BlockfrostClient {
   /** Get latest block info */
   async getLatestBlock(): Promise<BlockfrostBlockInfo> {
     return this.fetch<BlockfrostBlockInfo>('/blocks/latest');
+  }
+
+  /** Get block info by slot (used to derive response epoch). */
+  async getBlockBySlot(slot: number): Promise<BlockfrostBlockInfo | null> {
+    return this.fetchOrNull<BlockfrostBlockInfo>(`/blocks/slot/${slot}`);
   }
 
   /** Get latest epoch info */

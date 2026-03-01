@@ -14,7 +14,7 @@ import type {
 
 export interface BlockchainService {
   /** The current mode */
-  readonly mode: 'mainnet' | 'testnet' | 'simulated';
+  readonly mode: 'mainnet' | 'testnet';
 
   /** Submit a survey definition, returning the surveyTxId and surveyHash */
   createSurvey(

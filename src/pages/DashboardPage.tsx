@@ -30,13 +30,13 @@ export function DashboardPage() {
   const uniqueVoters = new Set(
     Array.from(state.responses.values())
       .flat()
-      .map((r) => r.voterAddress ?? r.responseCredential)
+      .map((r) => `${r.responderRole}|${r.responseCredential}`)
   ).size;
 
   // Get the top 3 most active non-expired surveys (by response count)
   const featuredSurveys = [...state.surveys]
     .filter((s) => {
-      const endEpoch = s.details.lifecycle?.endEpoch;
+      const endEpoch = s.details.endEpoch;
       if (typeof endEpoch !== 'number' || typeof currentEpoch !== 'number') {
         return true;
       }

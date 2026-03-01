@@ -50,18 +50,10 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
   const { currentEpoch } = useApp();
   const { t } = useI18n();
   const { details } = survey;
-  const endEpoch = details.lifecycle?.endEpoch;
+  const endEpoch = details.endEpoch;
   const hasEpochLifecycle = typeof endEpoch === 'number';
   const isExpired = hasEpochLifecycle && typeof currentEpoch === 'number' && currentEpoch > endEpoch;
-  const questions = details.questions && details.questions.length > 0
-    ? details.questions
-    : (details.question && details.methodType
-      ? [{
-        questionId: 'q1',
-        question: details.question,
-        methodType: details.methodType,
-      }]
-      : []);
+  const questions = details.questions ?? [];
   const firstMethod = questions[0]?.methodType;
   const mixedMethods = questions.length > 1 && new Set(questions.map((q) => q.methodType)).size > 1;
   const config = METHOD_CONFIG[firstMethod as keyof typeof METHOD_CONFIG] ?? {
@@ -93,14 +85,14 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
                 ? 'Mixed'
                 : (config.label.startsWith('detail.') ? t(config.label) : config.label)}
             </div>
-            {details.eligibility && (
+            {details.roleWeighting && Object.keys(details.roleWeighting).length > 0 && (
               <div className="flex gap-1">
-                {details.eligibility.map((role) => (
+                {(Object.keys(details.roleWeighting) as Array<keyof typeof details.roleWeighting>).map((role) => (
                   <span
-                    key={role}
+                    key={String(role)}
                     className="text-[10px] px-2 py-0.5 rounded-md bg-slate-700/50 text-slate-400 font-medium border border-slate-600/30"
                   >
-                    {t(`role.${role}`)}
+                    {t(`role.${String(role)}`)}
                   </span>
                 ))}
               </div>
@@ -134,10 +126,10 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
               <Users className="w-3 h-3" />
               <span className="font-semibold text-slate-400">{responseCount}</span> {t('detail.responses')}
             </span>
-            {details.lifecycle?.endEpoch != null && (
+            {details.endEpoch != null && (
               <span className="hidden sm:flex items-center gap-1.5">
                 <Clock className="w-3 h-3" />
-                {t('surveyCard.endsEpoch', { epoch: details.lifecycle.endEpoch.toLocaleString() })}
+                {t('surveyCard.endsEpoch', { epoch: details.endEpoch.toLocaleString() })}
               </span>
             )}
           </div>

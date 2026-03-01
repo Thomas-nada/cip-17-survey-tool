@@ -116,19 +116,11 @@ export function SurveyDetailPage() {
 
   const responseCount =
     state.responses.get(survey.surveyTxId)?.length ?? 0;
-  const endEpoch = survey.details.lifecycle?.endEpoch;
+  const endEpoch = survey.details.endEpoch;
   const hasEpochLifecycle = typeof endEpoch === 'number';
   const isExpired = hasEpochLifecycle && typeof currentEpoch === 'number' && currentEpoch > endEpoch;
 
-  const questions = survey.details.questions && survey.details.questions.length > 0
-    ? survey.details.questions
-    : (survey.details.question && survey.details.methodType
-      ? [{
-        questionId: 'q1',
-        question: survey.details.question,
-        methodType: survey.details.methodType,
-      }]
-      : []);
+  const questions = survey.details.questions ?? [];
   const firstMethod = questions[0]?.methodType;
   const mixedMethods = questions.length > 1 && new Set(questions.map((q) => q.methodType)).size > 1;
   const MethodIcon = mixedMethods
@@ -169,9 +161,9 @@ export function SurveyDetailPage() {
               <MethodIcon className="w-3 h-3" />
               {methodLabel}
             </div>
-            {survey.details.eligibility && (
+            {survey.details.roleWeighting && Object.keys(survey.details.roleWeighting).length > 0 && (
               <div className="flex gap-1">
-                {survey.details.eligibility.map((role) => (
+                {(Object.keys(survey.details.roleWeighting) as string[]).map((role) => (
                   <span
                     key={role}
                     className="text-[10px] px-2 py-0.5 rounded-md bg-slate-700/50 text-slate-400 font-medium border border-slate-600/30"

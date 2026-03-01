@@ -17,7 +17,6 @@ function questionToMap(question: SurveyQuestion): Map<string, unknown> {
   q.set('questionId', question.questionId);
   q.set('question', question.question);
   q.set('methodType', question.methodType);
-  if (question.required !== undefined) q.set('required', question.required);
   if (question.options !== undefined) q.set('options', question.options);
   if (question.maxSelections !== undefined) q.set('maxSelections', question.maxSelections);
   if (question.numericConstraints !== undefined) {
@@ -49,66 +48,15 @@ function surveyDetailsToMap(details: SurveyDetails): Map<string, unknown> {
   m.set('specVersion', details.specVersion);
   m.set('title', details.title);
   m.set('description', details.description);
-  if (details.questions && details.questions.length > 0) {
-    m.set('questions', details.questions.map(questionToMap));
-  } else {
-    // Legacy single-question payload support
-    m.set('question', details.question);
-    m.set('methodType', details.methodType);
+  m.set('questions', details.questions.map(questionToMap));
+  if (details.roleWeighting) {
+    const rw = new Map<string, unknown>();
+    for (const [key, value] of Object.entries(details.roleWeighting)) {
+      if (value !== undefined) rw.set(key, value);
+    }
+    m.set('roleWeighting', rw);
   }
-
-  // Legacy single-question conditional fields
-  if (!details.questions || details.questions.length === 0) {
-    if (details.options !== undefined) {
-      m.set('options', details.options);
-    }
-    if (details.maxSelections !== undefined) {
-      m.set('maxSelections', details.maxSelections);
-    }
-    if (details.numericConstraints !== undefined) {
-      const nc = new Map<string, unknown>();
-      nc.set('minValue', details.numericConstraints.minValue);
-      nc.set('maxValue', details.numericConstraints.maxValue);
-      if (details.numericConstraints.step !== undefined) {
-        nc.set('step', details.numericConstraints.step);
-      }
-      m.set('numericConstraints', nc);
-    }
-    if (details.methodSchemaUri !== undefined) {
-      m.set('methodSchemaUri', details.methodSchemaUri);
-    }
-    if (details.hashAlgorithm !== undefined) {
-      m.set('hashAlgorithm', details.hashAlgorithm);
-    }
-    if (details.methodSchemaHash !== undefined) {
-      m.set('methodSchemaHash', details.methodSchemaHash);
-    }
-  }
-
-  // Optional fields
-  if (details.eligibility !== undefined) {
-    m.set('eligibility', details.eligibility);
-  }
-  if (details.voteWeighting !== undefined) {
-    m.set('voteWeighting', details.voteWeighting);
-  }
-  if (details.referenceAction !== undefined) {
-    const ra = new Map<string, unknown>();
-    ra.set('transactionId', details.referenceAction.transactionId);
-    ra.set('actionIndex', details.referenceAction.actionIndex);
-    m.set('referenceAction', ra);
-  }
-  if (details.lifecycle !== undefined) {
-    const lc = new Map<string, unknown>();
-    // Support both new (endEpoch) and legacy (startSlot/endSlot) formats
-    const lcAny = details.lifecycle as unknown as Record<string, unknown>;
-    for (const [key, val] of Object.entries(lcAny)) {
-      if (val !== undefined) {
-        lc.set(key, val);
-      }
-    }
-    m.set('lifecycle', lc);
-  }
+  m.set('endEpoch', details.endEpoch);
 
   return m;
 }

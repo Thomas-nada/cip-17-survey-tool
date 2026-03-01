@@ -209,8 +209,16 @@ export function TallyDashboard({ survey }: Props) {
   const { t } = useI18n();
   const isOnChainMode = mode === 'mainnet' || mode === 'testnet';
   const responses = state.responses.get(survey.surveyTxId) ?? [];
-  const weighting = survey.details.voteWeighting ?? 'CredentialBased';
-  const isStakeBased = weighting === 'StakeBased';
+  const configuredRoleWeighting = useMemo(
+    () => survey.details.roleWeighting ?? {},
+    [survey.details.roleWeighting]
+  );
+  const requiredRoles = useMemo(
+    () => Object.keys(configuredRoleWeighting) as EligibilityRole[],
+    [configuredRoleWeighting]
+  );
+  const weighting = (Object.values(configuredRoleWeighting)[0] ?? 'CredentialBased');
+  const isStakeBased = weighting === 'StakeBased' || weighting === 'PledgeBased';
   const [showAllResponses, setShowAllResponses] = useState(false);
 
   // Stake map: responseCredential → lovelace (for StakeBased weighting)
@@ -370,17 +378,17 @@ export function TallyDashboard({ survey }: Props) {
       return;
     }
 
-    const requiredRoles = survey.details.eligibility ?? [];
     const hasDRepRole = requiredRoles.includes('DRep');
     const hasSPORole = requiredRoles.includes('SPO');
     const hasCCRole = requiredRoles.includes('CC');
     const hasStakeholderRole = requiredRoles.includes('Stakeholder');
-    const unique = new Map<string, { credential: string; voterAddress?: string }>();
+    const unique = new Map<string, { credential: string; voterAddress?: string; txId: string }>();
     for (const resp of responses) {
       if (!unique.has(resp.responseCredential)) {
         unique.set(resp.responseCredential, {
           credential: resp.responseCredential,
           voterAddress: resp.voterAddress,
+          txId: resp.txId,
         });
       }
     }
@@ -392,24 +400,59 @@ export function TallyDashboard({ survey }: Props) {
       const map = new Map<string, bigint>();
       const oneVote = new Set<string>();
 
-      for (const { credential, voterAddress } of unique.values()) {
+      for (const { credential, voterAddress, txId } of unique.values()) {
         if (cancelled) return;
         try {
-          // DRep delegated power
-          if (hasDRepRole) {
-            const drepInfo = await blockfrostClient.getDRepInfo(credential);
-            if (drepInfo && !drepInfo.retired && drepInfo.amount) {
-              map.set(credential, BigInt(drepInfo.amount));
-              continue;
+          let lookupAddress = voterAddress ?? '';
+          if (!lookupAddress || lookupAddress === 'unknown') {
+            try {
+              const utxos = await blockfrostClient.getTransactionUtxos(txId);
+              const txInput = utxos?.inputs?.[0]?.address;
+              if (typeof txInput === 'string' && txInput.length > 0) {
+                lookupAddress = txInput;
+              }
+            } catch {
+              // best effort fallback only
             }
           }
 
-          // Resolve stake address for CC/SPO/Stakeholder checks
+          // Resolve stake address once and reuse across role-specific lookups.
           const stakeAddress = await resolveStakeAddressForLookup(
             blockfrostClient,
-            voterAddress,
+            lookupAddress,
             credential
           );
+
+          // DRep delegated power
+          if (hasDRepRole) {
+            let drepPower: bigint | null = null;
+            const drepInfo = await blockfrostClient.getDRepInfo(credential);
+            if (drepInfo && !drepInfo.retired && drepInfo.amount) {
+              drepPower = BigInt(drepInfo.amount);
+            }
+
+            // Fallback parity with voting page: controlled wallet stake amount.
+            let stakePower: bigint | null = null;
+            if (stakeAddress) {
+              const accountInfo = await blockfrostClient.getAccountInfo(stakeAddress);
+              if (accountInfo) {
+                stakePower = BigInt(accountInfo.controlled_amount);
+              }
+            }
+
+            if (drepPower !== null && drepPower > 0n) {
+              map.set(credential, drepPower);
+              continue;
+            }
+            if (stakePower !== null) {
+              map.set(credential, stakePower);
+              continue;
+            }
+            if (drepPower !== null) {
+              map.set(credential, drepPower);
+              continue;
+            }
+          }
 
           // CC fixed power
           if (hasCCRole && stakeAddress && await blockfrostClient.isCCMember(stakeAddress)) {
@@ -470,7 +513,7 @@ export function TallyDashboard({ survey }: Props) {
     })();
 
     return () => { cancelled = true; };
-  }, [responses, isOnChainMode, blockfrostClient, survey.details.eligibility]);
+  }, [responses, isOnChainMode, blockfrostClient, requiredRoles]);
 
   // Resolve a role badge per credential for response-list display.
   useEffect(() => {
@@ -481,7 +524,6 @@ export function TallyDashboard({ survey }: Props) {
       return;
     }
 
-    const requiredRoles = survey.details.eligibility ?? [];
     const shouldCheckDRep = requiredRoles.length === 0 || requiredRoles.includes('DRep');
     const shouldCheckCC = requiredRoles.length === 0 || requiredRoles.includes('CC');
     const shouldCheckSPO = requiredRoles.length === 0 || requiredRoles.includes('SPO');
@@ -560,7 +602,7 @@ export function TallyDashboard({ survey }: Props) {
     })();
 
     return () => { cancelled = true; };
-  }, [responses, isOnChainMode, blockfrostClient, survey.details.eligibility]);
+  }, [responses, isOnChainMode, blockfrostClient, requiredRoles]);
 
   // UI fallback: if a stored credential is still addr..., resolve to stake...
   // so SPO/stake identities are displayed consistently in the response table.
@@ -642,11 +684,12 @@ export function TallyDashboard({ survey }: Props) {
       .filter((r) => r.identityVerified !== false)
       .sort((a, b) => {
       if (a.slot !== b.slot) return a.slot - b.slot;
-      return a.txIndexInBlock - b.txIndexInBlock;
+      if (a.txIndexInBlock !== b.txIndexInBlock) return a.txIndexInBlock - b.txIndexInBlock;
+      return (a.metadataPosition ?? 0) - (b.metadataPosition ?? 0);
     });
     const latest = new Map<string, string>();
     for (const resp of ordered) {
-      const voterKey = resp.voterAddress ?? resp.responseCredential;
+      const voterKey = `${resp.responderRole}|${resp.responseCredential}`;
       latest.set(voterKey, resp.txId);
     }
     return latest;
@@ -654,7 +697,7 @@ export function TallyDashboard({ survey }: Props) {
 
   const responseAuditRows = useMemo(() => {
     return responses.map((resp) => {
-      const voterKey = resp.voterAddress ?? resp.responseCredential;
+      const voterKey = `${resp.responderRole}|${resp.responseCredential}`;
       const unverified = resp.identityVerified === false;
       const superseded = latestCountedByVoter.get(voterKey) !== resp.txId;
       const isCounted = !unverified && !superseded;
@@ -1113,8 +1156,8 @@ export function TallyDashboard({ survey }: Props) {
             </thead>
             <tbody>
               {displayedResponses.map((resp) => {
-                const hasSpoEligibility = (survey.details.eligibility ?? []).includes('SPO');
-                const voterKey = resp.voterAddress ?? resp.responseCredential;
+                const hasSpoEligibility = requiredRoles.includes('SPO');
+                const voterKey = `${resp.responderRole}|${resp.responseCredential}`;
                 const unverified = resp.identityVerified === false;
                 const superseded = latestCountedByVoter.get(voterKey) !== resp.txId;
                 const isCounted = !unverified && !superseded;
@@ -1163,9 +1206,17 @@ export function TallyDashboard({ survey }: Props) {
                 const txPower = stakeMap.get(resp.txId);
                 const credPower = stakeMap.get(resp.responseCredential);
                 const voterPower = resp.voterAddress ? stakeMap.get(resp.voterAddress) : undefined;
+                const submitPower = (() => {
+                  if (!resp.submitPowerLovelace) return undefined;
+                  try {
+                    return BigInt(resp.submitPowerLovelace);
+                  } catch {
+                    return undefined;
+                  }
+                })();
                 const resolvedPower = isStakeBased
-                  ? (txPower ?? credPower ?? voterPower ?? displayVotingPower.get(resp.responseCredential))
-                  : displayVotingPower.get(resp.responseCredential);
+                  ? (txPower ?? credPower ?? voterPower ?? submitPower ?? displayVotingPower.get(resp.responseCredential))
+                  : (submitPower ?? displayVotingPower.get(resp.responseCredential));
                 return (
                   <tr
                     key={resp.txId}

@@ -29,4 +29,4 @@ export const BUILTIN_METHODS = [
 ] as const;
 
 export const ELIGIBILITY_ROLES = ['DRep', 'SPO', 'CC', 'Stakeholder'] as const;
-export const VOTE_WEIGHTINGS = ['CredentialBased', 'StakeBased'] as const;
+export const VOTE_WEIGHTINGS = ['CredentialBased', 'StakeBased', 'PledgeBased'] as const;

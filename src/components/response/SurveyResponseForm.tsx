@@ -15,7 +15,7 @@ import {
   METHOD_MULTI_SELECT,
   METHOD_NUMERIC_RANGE,
 } from '../../types/survey.ts';
-import type { StoredSurvey, SurveyResponse, SurveyQuestion, SurveyAnswer, EligibilityRole } from '../../types/survey.ts';
+import type { StoredSurvey, SurveyResponse, SurveyQuestion, EligibilityRole } from '../../types/survey.ts';
 
 interface Props {
   survey: StoredSurvey;
@@ -63,15 +63,19 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   const { t } = useI18n();
   const { details } = survey;
   const isOnChainMode = mode === 'mainnet' || mode === 'testnet';
-  const endEpoch = details.lifecycle?.endEpoch;
+  const endEpoch = details.endEpoch;
   const isExpired =
     typeof endEpoch === 'number' &&
     typeof currentEpoch === 'number' &&
     currentEpoch > endEpoch;
+  const requiredRoles = useMemo(
+    () => Object.keys(details.roleWeighting ?? {}) as EligibilityRole[],
+    [details.roleWeighting]
+  );
 
   // Eligibility check
-  const eligibility = useEligibility(details.eligibility);
-  const hasEligibilityRestrictions = Boolean(details.eligibility && details.eligibility.length > 0);
+  const eligibility = useEligibility(requiredRoles);
+  const hasEligibilityRestrictions = requiredRoles.length > 0;
 
   const questions: SurveyQuestion[] = useMemo(() => {
     if (details.questions && details.questions.length > 0) return details.questions;
@@ -79,7 +83,6 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       return [{
         questionId: 'q1',
         question: details.question,
-        required: true,
         methodType: details.methodType,
         options: details.options,
         maxSelections: details.maxSelections,
@@ -98,6 +101,8 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   const [customByQuestion, setCustomByQuestion] = useState<Record<string, string>>({});
   const [markdownPreviewByQuestion, setMarkdownPreviewByQuestion] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [selectedVoteRole, setSelectedVoteRole] = useState<EligibilityRole | null>(null);
   const [showPayload, setShowPayload] = useState(false);
   const [cliMode, setCliMode] = useState(false);
   const [cliCredential, setCliCredential] = useState('');
@@ -122,32 +127,25 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
     const base: SurveyResponse = {
       specVersion: SPEC_VERSION,
       surveyTxId: survey.surveyTxId,
-      surveyHash: survey.surveyHash,
+      answers: [],
     };
-    base.answers = questions.flatMap<SurveyAnswer>((q) => {
-      const isRequired = q.required !== false;
+    base.answers = questions.map((q) => {
       if (q.methodType === METHOD_SINGLE_CHOICE || q.methodType === METHOD_MULTI_SELECT) {
-        const selection = selectedByQuestion[q.questionId] ?? [];
-        if (!isRequired && selection.length === 0) return [];
-        return [{
+        return {
           questionId: q.questionId,
-          selection,
-        }];
+          selection: selectedByQuestion[q.questionId] ?? [],
+        };
       }
       if (q.methodType === METHOD_NUMERIC_RANGE) {
-        const numericValue = numericByQuestion[q.questionId];
-        if (!isRequired && numericValue === undefined) return [];
-        return [{
+        return {
           questionId: q.questionId,
-          numericValue: numericValue ?? q.numericConstraints?.minValue ?? 0,
-        }];
+          numericValue: numericByQuestion[q.questionId] ?? q.numericConstraints?.minValue ?? 0,
+        };
       }
-      const customValue = customByQuestion[q.questionId] ?? '';
-      if (!isRequired && customValue.trim().length === 0) return [];
-      return [{
+      return {
         questionId: q.questionId,
-        customValue,
-      }];
+        customValue: customByQuestion[q.questionId] ?? '',
+      };
     });
 
     return base;
@@ -168,19 +166,33 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
     };
   }, [response]);
 
-  const requiredRoles = details.eligibility ?? [];
   const stakeholderOnlySurvey =
     requiredRoles.length === 1 && requiredRoles[0] === 'Stakeholder';
   const openSurvey = requiredRoles.length === 0;
+  const mixedStakeholderGovernanceSurvey =
+    requiredRoles.includes('Stakeholder') &&
+    requiredRoles.some((r) => r === 'DRep' || r === 'SPO' || r === 'CC');
   const ccSpoOnlySurvey =
     requiredRoles.length > 0 &&
     requiredRoles.every((r) => r === 'CC' || r === 'SPO');
   const forceCliOnlySurvey = requiredRoles.includes('CC') || requiredRoles.includes('SPO');
   const hasWalletVotingPath = Boolean(wallet.connectedWallet && !forceCliOnlySurvey);
 
+  useEffect(() => {
+    if (requiredRoles.length === 0) {
+      setSelectedVoteRole(null);
+      return;
+    }
+    if (requiredRoles.length === 1) {
+      setSelectedVoteRole(requiredRoles[0]);
+      return;
+    }
+    setSelectedVoteRole((prev) => (prev && requiredRoles.includes(prev) ? prev : requiredRoles[0]));
+  }, [requiredRoles]);
+
   const effectiveCredential = useMemo(() => {
     if (cliMode && (!wallet.connectedWallet || forceCliOnlySurvey)) return cliCredential.trim();
-    const prefersDRepCredential = requiredRoles.includes('DRep');
+    const prefersDRepCredential = selectedVoteRole === 'DRep';
     if (prefersDRepCredential && eligibility.drepId && eligibility.walletRoles.includes('DRep')) {
       return eligibility.drepId;
     }
@@ -192,7 +204,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
     forceCliOnlySurvey,
     eligibility.drepId,
     eligibility.walletRoles,
-    requiredRoles,
+    selectedVoteRole,
   ]);
   const cliProofRole = useMemo(() => {
     const credential = (effectiveCredential ?? '').trim();
@@ -208,39 +220,20 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       msg: [`Response to ${survey.details.title}`],
       surveyResponse: {
         ...response,
-        ...(effectiveCredential ? { responseCredential: effectiveCredential } : {}),
-        ...(cliMode && effectiveCredential && cliProofKey.trim() && cliProofSignature.trim()
-          ? {
-              proof: {
-                message: JSON.stringify({
-                  surveyTxId: response.surveyTxId,
-                  surveyHash: response.surveyHash,
-                  responseCredential: effectiveCredential,
-                  response: challengeResponsePayload,
-                }),
-                key: cliProofKey.trim(),
-                signature: cliProofSignature.trim(),
-                scheme: 'ed25519',
-              },
-            }
-          : {}),
       },
     },
-  }), [response, survey.details.title, effectiveCredential, cliMode, cliProofKey, cliProofSignature, challengeResponsePayload]);
+  }), [response, survey.details.title]);
 
   const cliPayloadJson = useMemo(
     () => JSON.stringify(cliPayload, null, 2),
     [cliPayload]
   );
   const proofChallenge = useMemo(() => {
-    if (!effectiveCredential) return '';
     return JSON.stringify({
       surveyTxId: response.surveyTxId,
-      surveyHash: response.surveyHash,
-      responseCredential: effectiveCredential,
       response: challengeResponsePayload,
     });
-  }, [effectiveCredential, response, challengeResponsePayload]);
+  }, [response, challengeResponsePayload]);
 
   const cliMetadataFilename = useMemo(
     () => `vote-metadata-${survey.surveyTxId.slice(0, 10)}.json`,
@@ -505,7 +498,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   };
 
   const checkCliEligibility = async () => {
-    const required = details.eligibility ?? [];
+    const required = requiredRoles;
     const trimmed = cliCredential.trim();
     if (!trimmed) {
       setCliError(t('vote.enterCredential'));
@@ -605,6 +598,12 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitAttempted(true);
+
+    if (requiredRoles.length > 1 && !selectedVoteRole) {
+      toast.error('Select which role you are voting as.');
+      return;
+    }
 
     if (isExpired) {
       toast.error(t('vote.surveyExpired'));
@@ -618,6 +617,16 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
 
     setSubmitting(true);
     try {
+      if (selectedVoteRole) {
+        const roleSet = new Set<EligibilityRole>(
+          hasWalletVotingPath ? eligibility.walletRoles : cliWalletRoles
+        );
+        if (!roleSet.has(selectedVoteRole)) {
+          toast.error(`Selected role ${selectedVoteRole} is not currently derivable for this submission path.`);
+          return;
+        }
+      }
+
       const msg = [`Response to ${survey.details.title}`];
       if (cliMode && (!wallet.connectedWallet || forceCliOnlySurvey)) {
         if (cliProofRole && !cliProofValidated) {
@@ -636,7 +645,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       }
 
       const responseForSubmission = effectiveCredential
-        ? { ...response, responseCredential: effectiveCredential }
+        ? { ...response }
         : response;
       const result = await blockchain.submitResponse(responseForSubmission, msg);
       setLastSubmittedTxId(result.txId);
@@ -647,11 +656,15 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
           surveyTxId: survey.surveyTxId,
           response: {
             txId: result.txId,
-            responseCredential: result.responseCredential,
+            responseCredential: effectiveCredential ?? result.responseCredential,
             claimedCredential: effectiveCredential ?? result.responseCredential,
             identityVerified: true,
             timestampMs: Date.now(),
+            submitPowerLovelace: eligibility.votingPowerLovelace !== null
+              ? eligibility.votingPowerLovelace.toString()
+              : undefined,
             surveyTxId: survey.surveyTxId,
+            responderRole: selectedVoteRole ?? requiredRoles[0] ?? 'Stakeholder',
             surveyHash: survey.surveyHash,
             answers: response.answers,
             selection: response.answers?.[0]?.selection ?? response.selection,
@@ -671,6 +684,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       setNumericByQuestion({});
       setCustomByQuestion({});
       setMarkdownPreviewByQuestion({});
+      setSubmitAttempted(false);
       onSubmitted?.();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
@@ -692,7 +706,6 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       <fieldset disabled={isExpired} className={isExpired ? 'opacity-60' : ''}>
       {questions.map((question, questionIndex) => {
         const method = question.methodType;
-        const isRequired = question.required !== false;
         const isOptionBased =
           method === METHOD_SINGLE_CHOICE || method === METHOD_MULTI_SELECT;
         const isNumeric = method === METHOD_NUMERIC_RANGE;
@@ -707,9 +720,6 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
               <h3 className="text-lg font-bold text-white mb-2 font-heading">
                 {questionIndex + 1}. {question.question}
               </h3>
-              {!isRequired && (
-                <p className="text-xs font-semibold text-slate-500 mb-2">Optional</p>
-              )}
               {questionIndex === 0 && (
                 <p className="text-sm text-slate-400 leading-relaxed">{details.description}</p>
               )}
@@ -885,10 +895,47 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       </div>
 
       {/* Validation errors */}
-      {!validation.valid && (
+      {submitAttempted && !validation.valid && (
         <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 animate-fadeIn">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           <span>{validation.errors[0]}</span>
+        </div>
+      )}
+
+      {requiredRoles.length > 1 && (
+        <div className="rounded-lg border border-slate-700/40 bg-slate-900/30 p-3 space-y-2">
+          <p className="text-xs font-semibold text-slate-300">Vote As</p>
+          <div className="flex flex-wrap gap-2">
+            {requiredRoles.map((role) => {
+              const active = selectedVoteRole === role;
+              return (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => setSelectedVoteRole(role)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                    active
+                      ? 'bg-teal-500/15 border-teal-500/30 text-teal-300'
+                      : 'bg-slate-800/50 border-slate-700/40 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  {roleLabel(role)}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-slate-500">
+            This selects your intended role path for this transaction. Final counted role is still chain-derived per CIP.
+          </p>
+        </div>
+      )}
+
+      {mixedStakeholderGovernanceSurvey && (
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-200">
+          CIP rule: `Stakeholder` is residual when governance roles are also configured.
+          If a governance-role identity (`DRep`/`SPO`/`CC`) is derivable for your response,
+          this vote is counted for that governance role, not as `Stakeholder`.
+          Submitting one transaction that counts as both roles from the same wallet is not supported by the CIP derivation rules.
         </div>
       )}
 
@@ -1073,7 +1120,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
                 <p className="text-sm font-medium text-red-300">{t('vote.notEligibleToVote')}</p>
                 <p className="text-xs text-red-400/70 mt-1">
                   {t('vote.requiresOneOf')}{' '}
-                  {details.eligibility!.map((r) => roleLabel(r)).join(', ')}
+                  {requiredRoles.map((r) => roleLabel(r)).join(', ')}
                 </p>
                 {eligibility.missingRoles.length > 0 && (
                   <p className="text-xs text-red-400/50 mt-0.5">
@@ -1113,7 +1160,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
 
           {/* Required roles badge row */}
           <div className="flex flex-wrap gap-2 mt-3">
-            {details.eligibility!.map((role) => {
+            {requiredRoles.map((role) => {
               const held = eligibility.walletRoles.includes(role);
               return (
                 <span
@@ -1175,7 +1222,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
           <div className="flex-1">
             <p className="text-sm font-medium text-slate-300">{t('vote.yourVotingPower')}</p>
             <p className="text-xs text-slate-500 mt-0.5">
-              {details.voteWeighting === 'StakeBased'
+              {(details.roleWeighting?.Stakeholder ?? details.roleWeighting?.DRep ?? details.roleWeighting?.SPO ?? details.roleWeighting?.CC) === 'StakeBased'
                 ? t('vote.stakeBasedWeightingInfo')
                 : t('vote.credentialBasedWeightingInfo')}
             </p>
@@ -1252,7 +1299,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
           );
         })()}
 
-        {!validation.valid && (
+        {submitAttempted && !validation.valid && (
           <p className="text-xs text-slate-500 text-center">
             {validation.errors[0]}
           </p>

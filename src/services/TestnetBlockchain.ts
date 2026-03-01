@@ -12,12 +12,13 @@ import type {
   StoredSurvey,
   StoredResponse,
   EligibilityRole,
+  RoleWeighting,
   CreateSurveyResult,
   SubmitResponseResult,
 } from '../types/survey.ts';
 import { BlockfrostClient } from './BlockfrostClient.ts';
 import { computeSurveyHash } from '../utils/hashing.ts';
-import { validateSurveyDetails } from '../utils/validation.ts';
+import { validateSurveyDetails, validateSurveyResponse } from '../utils/validation.ts';
 import { METADATA_LABEL } from '../constants/methodTypes.ts';
 import {
   BrowserWallet,
@@ -415,6 +416,88 @@ export class TestnetBlockchain implements BlockchainService {
     }
   }
 
+  private getRequiredRoles(details: SurveyDetails): EligibilityRole[] {
+    if (details.roleWeighting && Object.keys(details.roleWeighting).length > 0) {
+      return Object.keys(details.roleWeighting) as EligibilityRole[];
+    }
+    if (details.eligibility && details.eligibility.length > 0) {
+      return details.eligibility;
+    }
+    return [];
+  }
+
+  private async deriveResponderIdentity(
+    voterAddress: string,
+    roleWeighting: RoleWeighting
+  ): Promise<{ valid: boolean; role?: EligibilityRole; credential?: string; reason?: string }> {
+    if (!voterAddress || voterAddress === 'unknown') {
+      return { valid: false, reason: 'Unable to resolve signer payment address' };
+    }
+
+    const requiredRoles = Object.keys(roleWeighting) as EligibilityRole[];
+    const governanceRoles = new Set<EligibilityRole>(['DRep', 'SPO', 'CC']);
+    const candidates: Array<{ role: EligibilityRole; credential: string }> = [];
+    const signerStakeAddress = await this.resolveSignerStakeAddress(voterAddress);
+
+    if (requiredRoles.includes('DRep') && signerStakeAddress) {
+      try {
+        const account = await this.blockfrost.getAccountInfo(signerStakeAddress);
+        const drepId = this.normalizeCredential(account?.drep_id);
+        if (drepId && await this.blockfrost.isDRep(drepId)) {
+          candidates.push({ role: 'DRep', credential: drepId });
+        }
+      } catch {
+        // best effort
+      }
+    }
+
+    if (requiredRoles.includes('SPO') && signerStakeAddress) {
+      try {
+        const account = await this.blockfrost.getAccountInfo(signerStakeAddress);
+        const poolId = this.normalizeCredential(account?.pool_id);
+        if (poolId && await this.blockfrost.isActivePool(poolId)) {
+          candidates.push({ role: 'SPO', credential: poolId });
+        }
+      } catch {
+        // best effort
+      }
+    }
+
+    if (requiredRoles.includes('CC') && signerStakeAddress) {
+      try {
+        const isCc = await this.blockfrost.isCCMember(signerStakeAddress);
+        if (isCc) {
+          candidates.push({ role: 'CC', credential: signerStakeAddress });
+        }
+      } catch {
+        // best effort
+      }
+    }
+
+    // Stakeholder residual rule
+    if (requiredRoles.includes('Stakeholder')) {
+      const hasGovernanceCandidate = candidates.some((c) => governanceRoles.has(c.role));
+      if (!hasGovernanceCandidate) {
+        if (signerStakeAddress) {
+          candidates.push({ role: 'Stakeholder', credential: signerStakeAddress });
+        } else {
+          return { valid: false, reason: 'No unique stake credential derivable for Stakeholder residual rule' };
+        }
+      }
+    }
+
+    if (candidates.length !== 1) {
+      return {
+        valid: false,
+        reason: candidates.length === 0
+          ? 'No eligible responder identity candidate could be derived'
+          : 'Multiple responder identity candidates derived',
+      };
+    }
+
+    return { valid: true, role: candidates[0].role, credential: candidates[0].credential };
+  }
+
   /**
    * Enforce role-aware identity verification rules:
    * - DRep: valid proof, derived DRep ID match, active on-chain, linked to signer stake account.
@@ -721,9 +804,18 @@ export class TestnetBlockchain implements BlockchainService {
 
     const surveyHash = computeSurveyHash(details);
 
+    const canonicalDetails: SurveyDetails = {
+      specVersion: details.specVersion,
+      title: details.title,
+      description: details.description,
+      questions: details.questions,
+      roleWeighting: details.roleWeighting,
+      endEpoch: details.endEpoch,
+    };
+
     const innerPayload: Record<string, unknown> = {
       ...(msg && msg.length > 0 ? { msg } : {}),
-      surveyDetails: { ...details },
+      surveyDetails: canonicalDetails,
     };
 
     const metadataPayload: Record<string, unknown> = {
@@ -744,15 +836,16 @@ export class TestnetBlockchain implements BlockchainService {
     msg?: string[]
   ): Promise<SubmitResponseResult> {
     const wallet = await this.getWallet([{ cip: 95 }]);
-    const fallbackCredential = await wallet.getChangeAddress();
-    const providedCredential = this.normalizeCredential(response.responseCredential);
-    // Keep signer payment address as the default identity unless caller explicitly
-    // provides a role-specific credential (e.g., DRep/CC/SPO flow).
-    const responseCredential = providedCredential ?? fallbackCredential;
+
+    const canonicalResponse: SurveyResponse = {
+      specVersion: response.specVersion,
+      surveyTxId: response.surveyTxId,
+      answers: response.answers,
+    };
 
     const innerPayload: Record<string, unknown> = {
       ...(msg && msg.length > 0 ? { msg } : {}),
-      surveyResponse: { ...response, responseCredential },
+      surveyResponse: canonicalResponse,
     };
 
     const metadataPayload: Record<string, unknown> = {
@@ -763,7 +856,7 @@ export class TestnetBlockchain implements BlockchainService {
 
     return {
       txId: txHash,
-      responseCredential,
+      responseCredential: await wallet.getChangeAddress(),
     };
   }
 
@@ -812,18 +905,23 @@ export class TestnetBlockchain implements BlockchainService {
     try {
       const entries = await this.blockfrost.getIndexedResponses(surveyTxId, sinceSlot);
       const surveys = await this.blockfrost.getIndexedSurveys();
-      let requiredRoles: EligibilityRole[] = [];
+      let surveyDetails: SurveyDetails | null = null;
       const surveyEntry = surveys.find((s) => s.tx_hash === surveyTxId);
       if (surveyEntry?.json_metadata && typeof surveyEntry.json_metadata === 'object' && 'surveyDetails' in surveyEntry.json_metadata) {
         try {
           const restoredSurvey = fromCardanoMetadata(surveyEntry.json_metadata) as Record<string, unknown>;
-          const details = restoredSurvey.surveyDetails as SurveyDetails;
-          requiredRoles = Array.isArray(details.eligibility) ? details.eligibility : [];
+          surveyDetails = restoredSurvey.surveyDetails as SurveyDetails;
         } catch {
-          requiredRoles = [];
+          surveyDetails = null;
         }
       }
+      if (!surveyDetails) return [];
+      const requiredRoles = this.getRequiredRoles(surveyDetails);
+      const roleWeighting: RoleWeighting = surveyDetails.roleWeighting ?? Object.fromEntries(
+        requiredRoles.map((r) => [r, 'CredentialBased'])
+      ) as RoleWeighting;
       const responses: StoredResponse[] = [];
+      const epochBySlot = new Map<number, number | null>();
 
       for (const entry of entries) {
         if (
@@ -842,25 +940,42 @@ export class TestnetBlockchain implements BlockchainService {
                 block_time: typeof entry.block_time === 'number' ? entry.block_time : undefined,
               };
 
-              // Resolve the voter's address from the transaction's first input
+              // Resolve signer payment address from the transaction's first input.
               let voterAddress = 'unknown';
               if (typeof entry.input_address === 'string' && entry.input_address.length > 0) {
                 voterAddress = entry.input_address;
               }
 
-              const claimedCredential =
-                typeof resp.responseCredential === 'string' && resp.responseCredential.trim().length > 0
-                  ? resp.responseCredential
-                  : undefined;
-              const verified = await this.verifyClaimedCredential(resp, claimedCredential, voterAddress, requiredRoles);
+              // Canonical response shape validation against referenced survey.
+              const validation = validateSurveyResponse(resp, surveyDetails);
+              if (!validation.valid) continue;
+
+              // Epoch filter: responseEpoch <= survey.endEpoch.
+              let responseEpoch = epochBySlot.get(txInfo.slot);
+              if (responseEpoch === undefined) {
+                const block = await this.blockfrost.getBlockBySlot(txInfo.slot);
+                responseEpoch = block?.epoch ?? null;
+                epochBySlot.set(txInfo.slot, responseEpoch);
+              }
+              if (responseEpoch !== null && responseEpoch > surveyDetails.endEpoch) {
+                continue;
+              }
+
+              // Derive exactly one eligible (responderRole, responseCredential) from chain context.
+              const derived = await this.deriveResponderIdentity(voterAddress, roleWeighting);
+              if (!derived.valid || !derived.role || !derived.credential) {
+                continue;
+              }
+              const metadataPos = (entry as { metadata_position?: unknown }).metadata_position;
 
               responses.push({
                 txId: entry.tx_hash,
-                responseCredential: verified.canonicalCredential,
-                claimedCredential,
+                responderRole: derived.role,
+                responseCredential: derived.credential,
+                claimedCredential: undefined,
                 voterAddress,
-                identityVerified: verified.verified,
-                identityVerificationReason: verified.reason,
+                identityVerified: true,
+                identityVerificationReason: undefined,
                 timestampMs: typeof txInfo.block_time === 'number' ? txInfo.block_time * 1000 : undefined,
                 surveyTxId: resp.surveyTxId,
                 surveyHash: resp.surveyHash,
@@ -870,6 +985,7 @@ export class TestnetBlockchain implements BlockchainService {
                 customValue: resp.customValue,
                 slot: txInfo.slot,
                 txIndexInBlock: txInfo.index,
+                metadataPosition: typeof metadataPos === 'number' ? metadataPos : 0,
               });
             } catch {
               console.warn(`Skipping response in tx ${entry.tx_hash}`);

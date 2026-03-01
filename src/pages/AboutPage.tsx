@@ -31,8 +31,7 @@ export function AboutPage() {
           </div>
           <p className="text-sm text-slate-300 leading-relaxed">
             A survey is published with <span className="font-code">surveyDetails</span> including title, description, and one or more questions.
-            Each question carries its own method type (single choice, multi-select, numeric range, or free-text/custom schema), and creators can mark each question as mandatory or optional.
-            At least one question must be mandatory.
+            Each question carries its own method type (single choice, multi-select, numeric range, or custom), while role weighting and end epoch are set at survey level.
           </p>
         </div>
         <div className="bg-slate-800/20 border border-slate-700/30 rounded-xl p-5">
@@ -51,7 +50,7 @@ export function AboutPage() {
             <h3 className="text-sm font-semibold uppercase tracking-wide">3. Submit Response</h3>
           </div>
           <p className="text-sm text-slate-300 leading-relaxed">
-            A vote is submitted as <span className="font-code">surveyResponse</span> pointing to both <span className="font-code">surveyTxId</span> and <span className="font-code">surveyHash</span>.
+            A vote is submitted as <span className="font-code">surveyResponse</span> pointing to <span className="font-code">surveyTxId</span>.
             Answers are stored per question in <span className="font-code">answers[]</span>, so one survey can contain mixed question types.
             Free-text responses support Markdown, including write/preview in the voting UI.
           </p>
@@ -62,8 +61,8 @@ export function AboutPage() {
             <h3 className="text-sm font-semibold uppercase tracking-wide">4. Verify Identity</h3>
           </div>
           <p className="text-sm text-slate-300 leading-relaxed">
-            The indexer verifies claimed credentials against transaction signer context and optional proof payloads.
-            Unverifiable responses are marked and excluded from counted tallies.
+            The indexer derives responder role and credential from chain context, then applies latest-valid-response-wins per role+credential tuple.
+            Canonical tallies are produced per role.
           </p>
         </div>
       </div>
@@ -74,9 +73,9 @@ export function AboutPage() {
           <h3 className="text-sm font-semibold uppercase tracking-wide">Creation Rules In This Tool</h3>
         </div>
         <ul className="text-sm text-slate-300 space-y-2 leading-relaxed list-disc pl-5">
-          <li>End epoch is required and must be between current epoch +1 and +10 (default: +6).</li>
-          <li>Eligibility roles are required (default: ADA Holder / Stakeholder).</li>
-          <li>Vote weighting is required (default: Stake-based).</li>
+          <li>End epoch is required.</li>
+          <li>Role weighting is required and must include at least one role.</li>
+          <li>Allowed weighting modes depend on role (e.g. CC is CredentialBased only, SPO also supports PledgeBased).</li>
           <li>If a survey has expired by epoch, voting is blocked and status shows Expired.</li>
         </ul>
       </div>
@@ -87,10 +86,10 @@ export function AboutPage() {
           <h3 className="text-sm font-semibold uppercase tracking-wide">Tally Rules</h3>
         </div>
         <ul className="text-sm text-slate-300 space-y-2 leading-relaxed list-disc pl-5">
-          <li>Latest valid response per voter is counted (older valid responses are superseded).</li>
-          <li>Weighting can be credential-based (1 per counted voter) or stake-based (ADA-weighted where configured).</li>
+          <li>Latest valid response per (role, credential) is counted (older valid responses are superseded).</li>
+          <li>Weighting is applied per role according to roleWeighting.</li>
           <li>Tallies are computed per question, supporting mixed question types in one survey.</li>
-          <li>Optional questions can be skipped; mandatory questions must be answered.</li>
+          <li>For multi-select, empty selection is valid and means no options selected.</li>
           <li>Audit exports include per-response status and a snapshot hash to support reproducibility.</li>
         </ul>
       </div>
@@ -104,12 +103,11 @@ export function AboutPage() {
       "specVersion": "...",
       "title": "...",
       "description": "...",
-      "eligibility": ["Stakeholder"],
-      "voteWeighting": "StakeBased",
-      "lifecycle": { "endEpoch": 1234 },
+      "roleWeighting": { "Stakeholder": "StakeBased", "DRep": "CredentialBased" },
+      "endEpoch": 1234,
       "questions": [
-        { "questionId": "q1", "question": "...", "required": true, "methodType": "..." },
-        { "questionId": "q2", "question": "...", "required": false, "methodType": "urn:cardano:poll-method:custom:v1" }
+        { "questionId": "q1", "question": "...", "methodType": "..." },
+        { "questionId": "q2", "question": "...", "methodType": "urn:cardano:poll-method:custom:v1" }
       ]
     }
   }
@@ -121,7 +119,6 @@ export function AboutPage() {
     "surveyResponse": {
       "specVersion": "...",
       "surveyTxId": "...",
-      "surveyHash": "...",
       "answers": [
         { "questionId": "q1", "selection": [0] },
         { "questionId": "q2", "customValue": "Markdown **text**" }

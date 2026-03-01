@@ -4,14 +4,11 @@ import toast from 'react-hot-toast';
 import { MethodTypeSelector } from './MethodTypeSelector.tsx';
 import { OptionsEditor } from './OptionsEditor.tsx';
 import { NumericConstraintsEditor } from './NumericConstraintsEditor.tsx';
-import { OptionalFieldsEditor } from './OptionalFieldsEditor.tsx';
 import { MetadataPreview } from './MetadataPreview.tsx';
 import { useApp } from '../../context/AppContext.tsx';
 import { useI18n } from '../../context/I18nContext.tsx';
 import { validateSurveyDetails } from '../../utils/validation.ts';
 import {
-  ELIGIBILITY_ROLES,
-  VOTE_WEIGHTINGS,
   DEFAULT_CUSTOM_METHOD_URN,
   DEFAULT_FREETEXT_SCHEMA_HASH,
   DEFAULT_FREETEXT_SCHEMA_URI,
@@ -27,10 +24,9 @@ import type {
   MethodType,
   SurveyDetails,
   SurveyQuestion,
+  RoleWeighting,
   EligibilityRole,
   VoteWeighting,
-  ReferenceAction,
-  Lifecycle,
   NumericConstraints,
 } from '../../types/survey.ts';
 
@@ -40,7 +36,6 @@ interface Props {
 
 interface QuestionDraft {
   question: string;
-  required: boolean;
   methodType: MethodType;
   customMethodType: string;
   methodSchemaUri: string;
@@ -62,7 +57,6 @@ export function SurveyCreationForm({ onCreated }: Props) {
   const [questions, setQuestions] = useState<QuestionDraft[]>([
     {
       question: '',
-      required: true,
       methodType: METHOD_SINGLE_CHOICE,
       customMethodType: DEFAULT_CUSTOM_METHOD_URN,
       methodSchemaUri: DEFAULT_FREETEXT_SCHEMA_URI,
@@ -72,14 +66,18 @@ export function SurveyCreationForm({ onCreated }: Props) {
       numericConstraints: { minValue: 0, maxValue: 100 },
     },
   ]);
-  const [eligibility, setEligibility] = useState<EligibilityRole[] | undefined>(['Stakeholder']);
-  const [voteWeighting, setVoteWeighting] = useState<VoteWeighting | undefined>('StakeBased');
-  const [referenceAction, setReferenceAction] = useState<ReferenceAction | undefined>();
-  const [lifecycle, setLifecycle] = useState<Lifecycle>({ endEpoch: 6 });
+  const [roleWeighting, setRoleWeighting] = useState<RoleWeighting>({ Stakeholder: 'StakeBased' });
+  const [endEpoch, setEndEpoch] = useState<number>(6);
   const [currentEpoch, setCurrentEpoch] = useState<number | null>(null);
-  const [lifecycleTouched, setLifecycleTouched] = useState(false);
+  const [endEpochTouched, setEndEpochTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [prefs, setPrefs] = useState(() => getUserPreferences());
+  const roleModes: Record<EligibilityRole, VoteWeighting[]> = {
+    CC: ['CredentialBased'],
+    DRep: ['CredentialBased', 'StakeBased'],
+    SPO: ['CredentialBased', 'StakeBased', 'PledgeBased'],
+    Stakeholder: ['StakeBased'],
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -90,8 +88,8 @@ export function SurveyCreationForm({ onCreated }: Props) {
         if (cancelled) return;
         const epoch = typeof latestEpoch.epoch === 'number' ? latestEpoch.epoch : null;
         setCurrentEpoch(epoch);
-        if (epoch !== null && !lifecycleTouched) {
-          setLifecycle({ endEpoch: epoch + 6 });
+        if (epoch !== null && !endEpochTouched) {
+          setEndEpoch(epoch + 6);
         }
       } catch {
         if (!cancelled) {
@@ -100,7 +98,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
       }
     })();
     return () => { cancelled = true; };
-  }, [isOnChainMode, blockfrostClient, lifecycleTouched]);
+  }, [isOnChainMode, blockfrostClient, endEpochTouched]);
   const buildQuestionFromDraft = useCallback((draft: QuestionDraft, index: number): SurveyQuestion => {
     const isCustom = ![
       METHOD_SINGLE_CHOICE,
@@ -111,7 +109,6 @@ export function SurveyCreationForm({ onCreated }: Props) {
     const base: SurveyQuestion = {
       questionId: `q${index + 1}`,
       question: draft.question.trim(),
-      required: draft.required,
       methodType: isCustom ? draft.customMethodType.trim() : draft.methodType,
     };
 
@@ -142,37 +139,24 @@ export function SurveyCreationForm({ onCreated }: Props) {
       title,
       description,
       questions: nonEmptyQuestions.map((q, i) => buildQuestionFromDraft(q, i)),
+      roleWeighting,
+      endEpoch,
     };
-    if (eligibility && eligibility.length > 0) details.eligibility = eligibility;
-    if (voteWeighting) details.voteWeighting = voteWeighting;
-    if (referenceAction) details.referenceAction = referenceAction;
-    details.lifecycle = lifecycle;
     return details;
-  }, [title, description, nonEmptyQuestions, buildQuestionFromDraft, eligibility, voteWeighting, referenceAction, lifecycle]);
+  }, [title, description, nonEmptyQuestions, buildQuestionFromDraft, roleWeighting, endEpoch]);
 
   const validation = useMemo(() => {
     const errors: string[] = [];
     if (!title.trim()) errors.push('title is required');
     if (!description.trim()) errors.push('description is required');
     if (nonEmptyQuestions.length === 0) errors.push('at least one question is required');
-    if (!nonEmptyQuestions.some((q) => q.required)) {
-      errors.push('at least one question must be mandatory');
+    if (Object.keys(roleWeighting).length === 0) {
+      errors.push('roleWeighting must include at least one role');
     }
-    if (!eligibility || eligibility.length === 0) {
-      errors.push('eligibility must include at least one role');
-    }
-    if (!voteWeighting) {
-      errors.push('voteWeighting is required');
-    }
-    const endEpoch = lifecycle.endEpoch;
-    if (!Number.isInteger(endEpoch ?? NaN)) {
-      errors.push('lifecycle.endEpoch is required');
-    } else if (typeof currentEpoch === 'number') {
-      const minEpoch = currentEpoch + 1;
-      const maxEpoch = currentEpoch + 10;
-      if ((endEpoch ?? 0) < minEpoch || (endEpoch ?? 0) > maxEpoch) {
-        errors.push(`lifecycle.endEpoch must be between ${minEpoch} and ${maxEpoch}`);
-      }
+    if (!Number.isInteger(endEpoch)) {
+      errors.push('endEpoch is required');
+    } else if (typeof currentEpoch === 'number' && endEpoch < currentEpoch) {
+      errors.push(`endEpoch must be >= ${currentEpoch}`);
     }
 
     questions.forEach((draft, index) => {
@@ -181,7 +165,9 @@ export function SurveyCreationForm({ onCreated }: Props) {
         specVersion: SPEC_VERSION,
         title: title || 'tmp',
         description: description || 'tmp',
-        questions: [{ ...question, required: true }],
+        questions: [{ ...question }],
+        roleWeighting: roleWeighting,
+        endEpoch: endEpoch,
       };
       const result = validateSurveyDetails(details);
       if (!result.valid) {
@@ -189,7 +175,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
       }
     });
     return { valid: errors.length === 0, errors };
-  }, [title, description, questions, nonEmptyQuestions.length, buildQuestionFromDraft, lifecycle.endEpoch, currentEpoch, eligibility, voteWeighting]);
+  }, [title, description, questions, nonEmptyQuestions.length, buildQuestionFromDraft, endEpoch, currentEpoch, roleWeighting]);
 
   const isFormFilled = title.trim() && description.trim() && nonEmptyQuestions.length > 0;
   const createMsg = title ? [title] : undefined;
@@ -318,7 +304,6 @@ export function SurveyCreationForm({ onCreated }: Props) {
       ...prev,
       {
         question: '',
-        required: true,
         methodType: METHOD_SINGLE_CHOICE,
         customMethodType: DEFAULT_CUSTOM_METHOD_URN,
         methodSchemaUri: DEFAULT_FREETEXT_SCHEMA_URI,
@@ -441,21 +426,6 @@ export function SurveyCreationForm({ onCreated }: Props) {
                         Remove
                       </button>
                     </div>
-                    <div className="flex items-center justify-between rounded-lg border border-slate-700/70 bg-slate-900/40 px-3 py-2">
-                      <span className="text-xs font-semibold text-slate-300">Question is mandatory</span>
-                      <button
-                        type="button"
-                        onClick={() => updateQuestion(index, { required: !q.required })}
-                        className={`px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors ${
-                          q.required
-                            ? 'bg-teal-500/15 border-teal-500/30 text-teal-300'
-                            : 'bg-slate-800/60 border-slate-700 text-slate-400'
-                        }`}
-                      >
-                        {q.required ? 'Mandatory' : 'Optional'}
-                      </button>
-                    </div>
-
                     <MethodTypeSelector
                       value={q.methodType}
                       onChange={(method) =>
@@ -511,10 +481,10 @@ export function SurveyCreationForm({ onCreated }: Props) {
             </div>
           </div>
 
-          {/* Lifecycle (Required) */}
+          {/* End Epoch (Required) */}
           <div className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              Lifecycle Window <span className="text-red-400">*</span>
+              End Epoch <span className="text-red-400">*</span>
             </label>
             <div className="pl-4 border-l-2 border-slate-700">
               <label className="block text-xs text-slate-400 mb-1">
@@ -522,13 +492,12 @@ export function SurveyCreationForm({ onCreated }: Props) {
               </label>
               <input
                 type="number"
-                min={typeof currentEpoch === 'number' ? currentEpoch + 1 : 1}
-                max={typeof currentEpoch === 'number' ? currentEpoch + 10 : 10}
-                value={lifecycle.endEpoch ?? ''}
+                min={typeof currentEpoch === 'number' ? currentEpoch : 0}
+                value={endEpoch}
                 onChange={(e) => {
                   const value = parseInt(e.target.value, 10);
-                  setLifecycle((prev) => ({ ...prev, endEpoch: Number.isNaN(value) ? 0 : value }));
-                  setLifecycleTouched(true);
+                  setEndEpoch(Number.isNaN(value) ? 0 : value);
+                  setEndEpochTouched(true);
                 }}
                 placeholder={
                   typeof currentEpoch === 'number'
@@ -539,74 +508,73 @@ export function SurveyCreationForm({ onCreated }: Props) {
               />
               <p className="text-xs text-slate-500 mt-1">
                 {typeof currentEpoch === 'number'
-                  ? `Allowed range: ${currentEpoch + 1} to ${currentEpoch + 10}. Default is ${currentEpoch + 6}.`
-                  : 'Allowed range: current epoch +1 to +10. Default is +6.'}
+                  ? `Must be >= current epoch (${currentEpoch}).`
+                  : 'Must be a non-negative integer.'}
               </p>
             </div>
           </div>
 
-          {/* Eligibility (Required) */}
+          {/* Role Weighting (Required) */}
           <div className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
             <label className="block text-sm font-medium text-slate-300 mb-2">
-              {t('create.eligibilityRoles')} <span className="text-red-400">*</span>
+              Role Weighting <span className="text-red-400">*</span>
             </label>
-            <div className="flex flex-wrap gap-2">
-              {ELIGIBILITY_ROLES.map((role) => (
-                <button
-                  key={role}
-                  type="button"
-                  onClick={() => {
-                    const current = eligibility ?? [];
-                    if (current.includes(role)) {
-                      const updated = current.filter((r) => r !== role);
-                      setEligibility(updated.length > 0 ? updated : undefined);
-                    } else {
-                      setEligibility([...current, role]);
-                    }
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    eligibility?.includes(role)
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
-                  }`}
-                >
-                  {t(`role.${role}`)}
-                </button>
-              ))}
+            <div className="space-y-2">
+              {(Object.keys(roleModes) as EligibilityRole[]).map((role) => {
+                const selectedMode = roleWeighting[role];
+                return (
+                  <div key={role} className="flex items-center gap-3">
+                    <label className="inline-flex items-center gap-2 text-sm text-slate-300 w-40">
+                      <input
+                        type="checkbox"
+                        checked={selectedMode !== undefined}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setRoleWeighting((prev) => ({ ...prev, [role]: roleModes[role][0] }));
+                          } else {
+                            setRoleWeighting((prev) => {
+                              const next = { ...prev };
+                              delete next[role];
+                              return next;
+                            });
+                          }
+                        }}
+                      />
+                      {role}
+                    </label>
+                    <select
+                      value={selectedMode ?? roleModes[role][0]}
+                      disabled={selectedMode === undefined}
+                      onChange={(e) =>
+                        setRoleWeighting((prev) => ({ ...prev, [role]: e.target.value as VoteWeighting }))
+                      }
+                      className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white disabled:opacity-40"
+                    >
+                      {roleModes[role].map((mode) => (
+                        <option key={mode} value={mode}>{mode}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-
-          {/* Vote Weighting (Required) */}
-          <div className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              {t('create.voteWeighting')} <span className="text-red-400">*</span>
-            </label>
-            <div className="flex gap-3">
-              {VOTE_WEIGHTINGS.map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  onClick={() => setVoteWeighting(w)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    voteWeighting === w
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
-                  }`}
-                >
-                  {w === 'StakeBased' ? t('results.stakeBased') : t('results.credentialBased')}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {t('create.defaultCredentialBased')}
+            <p className="text-xs text-slate-500 mt-2">
+              Select one or more roles. Modes are restricted per CIP.
             </p>
+            {(() => {
+              const selectedRoles = Object.keys(roleWeighting) as EligibilityRole[];
+              const hasStakeholder = selectedRoles.includes('Stakeholder');
+              const hasGovernance = selectedRoles.some((r) => r === 'DRep' || r === 'SPO' || r === 'CC');
+              if (!hasStakeholder || !hasGovernance) return null;
+              return (
+                <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-200">
+                  CIP note: `Stakeholder` is residual. If a governance-role identity (`DRep`/`SPO`/`CC`) is derivable for a response,
+                  that response is counted in that governance role, not as `Stakeholder`. To collect both viewpoints from one operator,
+                  use separate credentials/wallets and separate response transactions.
+                </div>
+              );
+            })()}
           </div>
-
-          {/* Optional Fields */}
-          <OptionalFieldsEditor
-            referenceAction={referenceAction}
-            onReferenceActionChange={setReferenceAction}
-          />
 
           {/* Validation errors */}
           {isFormFilled && !validation.valid && (

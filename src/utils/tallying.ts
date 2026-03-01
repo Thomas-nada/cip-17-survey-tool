@@ -1,22 +1,12 @@
-/**
- * Label 17 Tallying Logic
- *
- * Implements:
- * - Response deduplication by voter key (latest-valid-response-wins)
- * - Chain ordering: (slot, txIndexInBlock)
- * - Weighting modes: CredentialBased (weight=1) and StakeBased (weight=stake)
- * - Multi-question tallies (questions[] + answers[])
- */
 import type {
   SurveyDetails,
   SurveyQuestion,
   SurveyAnswer,
   StoredResponse,
   TallyResult,
-  OptionTally,
-  NumericTally,
   VoteWeighting,
   QuestionTally,
+  EligibilityRole,
 } from '../types/survey.ts';
 import {
   METHOD_SINGLE_CHOICE,
@@ -57,36 +47,8 @@ function getAnswers(resp: StoredResponse): SurveyAnswer[] {
   }];
 }
 
-export function tallySurveyResponses(
-  survey: SurveyDetails,
-  responses: StoredResponse[],
-  weighting: VoteWeighting = 'CredentialBased',
-  stakeMap?: Map<string, bigint>
-): TallyResult {
-  const questions = getQuestions(survey);
-  const questionById = new Map(questions.map((q) => [q.questionId, q]));
-  const voterKey = (resp: StoredResponse) => resp.voterAddress ?? resp.responseCredential;
-  const getStakeLovelace = (resp: StoredResponse): bigint | undefined => {
-    if (!stakeMap) return undefined;
-    const byTx = stakeMap.get(resp.txId);
-    if (byTx !== undefined) return byTx;
-    const byCredential = stakeMap.get(resp.responseCredential);
-    if (byCredential !== undefined) return byCredential;
-    if (resp.voterAddress) return stakeMap.get(resp.voterAddress);
-    return undefined;
-  };
-  const verifiableResponses = responses.filter((r) => r.identityVerified !== false);
-
-  const sorted = [...verifiableResponses].sort((a, b) => {
-    if (a.slot !== b.slot) return a.slot - b.slot;
-    return a.txIndexInBlock - b.txIndexInBlock;
-  });
-
-  const latestByVoter = new Map<string, StoredResponse>();
-  for (const resp of sorted) latestByVoter.set(voterKey(resp), resp);
-  const deduplicated = Array.from(latestByVoter.values());
-
-  const questionTallies: QuestionTally[] = questions.map((q) => ({
+function emptyQuestionTallies(questions: SurveyQuestion[]): QuestionTally[] {
+  return questions.map((q) => ({
     questionId: q.questionId,
     question: q.question,
     methodType: q.methodType,
@@ -101,13 +63,34 @@ export function tallySurveyResponses(
       ? []
       : undefined,
   }));
+}
 
+function tallyForRole(
+  questions: SurveyQuestion[],
+  responses: StoredResponse[],
+  weighting: VoteWeighting,
+  stakeMap?: Map<string, bigint>
+): { questionTallies: QuestionTally[]; totalWeight: number } {
+  const questionTallies = emptyQuestionTallies(questions);
+  const questionById = new Map(questions.map((q) => [q.questionId, q]));
   const numericValuesByQuestion = new Map<string, number[]>();
 
-  for (const resp of deduplicated) {
-    const weight = weighting === 'StakeBased' && stakeMap
-      ? Number(getStakeLovelace(resp) ?? 0n) / 1_000_000
-      : 1;
+  const getWeight = (resp: StoredResponse): number => {
+    if (weighting === 'CredentialBased') return 1;
+    if (weighting === 'StakeBased') {
+      if (!stakeMap) return 0;
+      const byTx = stakeMap.get(resp.txId);
+      const byCredential = stakeMap.get(resp.responseCredential);
+      const byAddress = resp.voterAddress ? stakeMap.get(resp.voterAddress) : undefined;
+      return Number(byTx ?? byCredential ?? byAddress ?? 0n) / 1_000_000;
+    }
+    // PledgeBased (SPO-only) - use explicit pledge key when available.
+    if (!stakeMap) return 0;
+    return Number(stakeMap.get(`pledge:${resp.responseCredential}`) ?? 0n) / 1_000_000;
+  };
+
+  for (const resp of responses) {
+    const weight = getWeight(resp);
     const answers = getAnswers(resp);
     for (const answer of answers) {
       const question = questionById.get(answer.questionId);
@@ -151,7 +134,6 @@ export function tallySurveyResponses(
     const median = values.length % 2 === 0
       ? (sortedVals[values.length / 2 - 1] + sortedVals[values.length / 2]) / 2
       : sortedVals[Math.floor(values.length / 2)];
-
     const nc = q.numericConstraints!;
     const range = nc.maxValue - nc.minValue;
     const binCount = Math.max(1, Math.min(10, range + 1));
@@ -175,23 +157,58 @@ export function tallySurveyResponses(
   }
 
   let totalWeight = 0;
-  if (weighting === 'StakeBased' && stakeMap) {
-    for (const resp of deduplicated) {
-      totalWeight += Number(getStakeLovelace(resp) ?? 0n) / 1_000_000;
-    }
-  } else {
-    totalWeight = deduplicated.length;
-  }
+  for (const resp of responses) totalWeight += getWeight(resp);
+  return { questionTallies, totalWeight };
+}
 
-  const legacySingle = questionTallies[0];
+export function tallySurveyResponses(
+  survey: SurveyDetails,
+  responses: StoredResponse[],
+  _weighting: VoteWeighting = 'CredentialBased',
+  stakeMap?: Map<string, bigint>
+): TallyResult {
+  const questions = getQuestions(survey);
+  const verifiableResponses = responses.filter((r) => r.identityVerified !== false);
+
+  const sorted = [...verifiableResponses].sort((a, b) => {
+    if (a.slot !== b.slot) return a.slot - b.slot;
+    if (a.txIndexInBlock !== b.txIndexInBlock) return a.txIndexInBlock - b.txIndexInBlock;
+    return (a.metadataPosition ?? 0) - (b.metadataPosition ?? 0);
+  });
+
+  const latestByTuple = new Map<string, StoredResponse>();
+  for (const resp of sorted) {
+    const key = `${resp.responderRole}|${resp.responseCredential}`;
+    latestByTuple.set(key, resp);
+  }
+  const deduplicated = Array.from(latestByTuple.values());
+
+  const roleWeighting = survey.roleWeighting ?? {};
+  const configuredRoles = Object.keys(roleWeighting) as EligibilityRole[];
+  const roleTallies = configuredRoles.map((role) => {
+    const roleResponses = deduplicated.filter((r) => r.responderRole === role);
+    const weighting = roleWeighting[role] as VoteWeighting;
+    const { questionTallies, totalWeight } = tallyForRole(questions, roleResponses, weighting, stakeMap);
+    return {
+      role,
+      weighting,
+      totalWeight,
+      responses: roleResponses.length,
+      questionTallies,
+    };
+  });
+
+  const firstRole = roleTallies[0];
+  const firstQuestion = firstRole?.questionTallies?.[0];
   return {
-    surveyTxId: verifiableResponses[0]?.surveyTxId ?? responses[0]?.surveyTxId ?? '',
+    surveyTxId: deduplicated[0]?.surveyTxId ?? responses[0]?.surveyTxId ?? '',
     totalResponses: responses.length,
     uniqueCredentials: deduplicated.length,
-    weighting,
-    totalWeight,
-    questionTallies,
-    optionTallies: legacySingle?.optionTallies,
-    numericTally: legacySingle?.numericTally,
+    roleTallies,
+    weighting: firstRole?.weighting ?? 'CredentialBased',
+    totalWeight: firstRole?.totalWeight ?? 0,
+    questionTallies: firstRole?.questionTallies ?? [],
+    optionTallies: firstQuestion?.optionTallies,
+    numericTally: firstQuestion?.numericTally,
   };
 }

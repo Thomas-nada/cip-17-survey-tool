@@ -1,6 +1,6 @@
 /**
  * Label 17 validation logic for survey definitions and responses.
- * Enforces all method-type-specific rules from the specification.
+ * Enforces CIP method rules and role-weighting constraints.
  */
 import type {
   SurveyDetails,
@@ -8,6 +8,9 @@ import type {
   MethodType,
   SurveyQuestion,
   SurveyAnswer,
+  EligibilityRole,
+  VoteWeighting,
+  RoleWeighting,
 } from '../types/survey.ts';
 import {
   METHOD_SINGLE_CHOICE,
@@ -22,16 +25,22 @@ export interface ValidationResult {
 
 const HEX64_REGEX = /^[0-9a-fA-F]{64}$/;
 
+function isBuiltinMethod(method: MethodType): boolean {
+  return method === METHOD_SINGLE_CHOICE ||
+    method === METHOD_MULTI_SELECT ||
+    method === METHOD_NUMERIC_RANGE;
+}
+
 function getQuestions(details: SurveyDetails): SurveyQuestion[] {
-  if (details.questions && details.questions.length > 0) {
+  if (Array.isArray(details.questions) && details.questions.length > 0) {
     return details.questions;
   }
+  // Legacy read compatibility
   if (details.question && details.methodType) {
     return [{
       questionId: 'q1',
       question: details.question,
       methodType: details.methodType,
-      required: true,
       options: details.options,
       maxSelections: details.maxSelections,
       numericConstraints: details.numericConstraints,
@@ -43,20 +52,71 @@ function getQuestions(details: SurveyDetails): SurveyQuestion[] {
   return [];
 }
 
+function validateRoleWeighting(roleWeighting: RoleWeighting | undefined): string[] {
+  const errors: string[] = [];
+  if (!roleWeighting || typeof roleWeighting !== 'object') {
+    errors.push('roleWeighting is required');
+    return errors;
+  }
+
+  const keys = Object.keys(roleWeighting) as EligibilityRole[];
+  if (keys.length === 0) {
+    errors.push('roleWeighting must include at least one role');
+    return errors;
+  }
+
+  const allowedRoles: EligibilityRole[] = ['DRep', 'SPO', 'CC', 'Stakeholder'];
+  for (const role of keys) {
+    if (!allowedRoles.includes(role)) {
+      errors.push(`Invalid roleWeighting role: ${role}`);
+      continue;
+    }
+
+    const mode = roleWeighting[role] as VoteWeighting | undefined;
+    if (!mode) {
+      errors.push(`roleWeighting.${role} is required`);
+      continue;
+    }
+
+    if (role === 'CC' && mode !== 'CredentialBased') {
+      errors.push('roleWeighting.CC must be CredentialBased');
+    }
+    if (role === 'DRep' && !['CredentialBased', 'StakeBased'].includes(mode)) {
+      errors.push('roleWeighting.DRep must be CredentialBased or StakeBased');
+    }
+    if (role === 'SPO' && !['CredentialBased', 'StakeBased', 'PledgeBased'].includes(mode)) {
+      errors.push('roleWeighting.SPO must be CredentialBased, StakeBased, or PledgeBased');
+    }
+    if (role === 'Stakeholder' && mode !== 'StakeBased') {
+      errors.push('roleWeighting.Stakeholder must be StakeBased');
+    }
+  }
+
+  return errors;
+}
+
 // ─── Survey Details Validation ──────────────────────────────────────
 
 export function validateSurveyDetails(details: SurveyDetails): ValidationResult {
   const errors: string[] = [];
 
-  // Required fields
   if (!details.specVersion) errors.push('specVersion is required');
-  if (!details.title) errors.push('title is required');
-  if (!details.description) errors.push('description is required');
+  if (!details.title?.trim()) errors.push('title is required');
+  if (!details.description?.trim()) errors.push('description is required');
+
+  if (details.endEpoch === undefined || !Number.isInteger(details.endEpoch) || details.endEpoch < 0) {
+    errors.push('endEpoch must be a non-negative integer');
+  }
+
+  errors.push(...validateRoleWeighting(details.roleWeighting));
+
   const questions = getQuestions(details);
-  if (questions.length === 0) errors.push('questions is required');
+  if (questions.length === 0) {
+    errors.push('questions is required and must be non-empty');
+    return { valid: false, errors };
+  }
 
   const questionIds = new Set<string>();
-  let hasRequiredQuestion = false;
   questions.forEach((q, idx) => {
     const prefix = `questions[${idx}]`;
     if (!q.questionId?.trim()) errors.push(`${prefix}.questionId is required`);
@@ -66,7 +126,6 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
       errors.push(`${prefix}.questionId must be unique`);
     }
     if (q.questionId) questionIds.add(q.questionId);
-    if (q.required !== false) hasRequiredQuestion = true;
 
     const method = q.methodType as MethodType;
     if (method === METHOD_SINGLE_CHOICE) {
@@ -83,14 +142,10 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
       if (!q.options || q.options.length < 2) {
         errors.push(`${prefix}: multi-select requires options with at least 2 values`);
       }
-      if (q.maxSelections === undefined || q.maxSelections < 1) {
+      if (!Number.isInteger(q.maxSelections) || (q.maxSelections ?? 0) < 1) {
         errors.push(`${prefix}: multi-select maxSelections is required and must be >= 1`);
       }
-      if (
-        q.options &&
-        q.maxSelections !== undefined &&
-        q.maxSelections > q.options.length
-      ) {
+      if (q.options && q.maxSelections !== undefined && q.maxSelections > q.options.length) {
         errors.push(`${prefix}: multi-select maxSelections must be <= number of options`);
       }
       if (q.numericConstraints !== undefined) {
@@ -100,17 +155,18 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
       if (!q.numericConstraints) {
         errors.push(`${prefix}: numeric-range requires numericConstraints`);
       } else {
-        if (q.numericConstraints.minValue === undefined) {
-          errors.push(`${prefix}: numericConstraints.minValue is required`);
+        const { minValue, maxValue, step } = q.numericConstraints;
+        if (!Number.isInteger(minValue)) {
+          errors.push(`${prefix}: numericConstraints.minValue must be an integer`);
         }
-        if (q.numericConstraints.maxValue === undefined) {
-          errors.push(`${prefix}: numericConstraints.maxValue is required`);
+        if (!Number.isInteger(maxValue)) {
+          errors.push(`${prefix}: numericConstraints.maxValue must be an integer`);
         }
-        if (q.numericConstraints.minValue > q.numericConstraints.maxValue) {
+        if (minValue > maxValue) {
           errors.push(`${prefix}: numericConstraints minValue must be <= maxValue`);
         }
-        if (q.numericConstraints.step !== undefined && q.numericConstraints.step <= 0) {
-          errors.push(`${prefix}: numericConstraints.step must be positive`);
+        if (step !== undefined && (!Number.isInteger(step) || step <= 0)) {
+          errors.push(`${prefix}: numericConstraints.step must be a positive integer`);
         }
       }
       if (q.options !== undefined) {
@@ -120,98 +176,32 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
         errors.push(`${prefix}: numeric-range maxSelections must be absent`);
       }
     } else {
-      if (!q.methodSchemaUri) {
+      if (!q.methodSchemaUri?.trim()) {
         errors.push(`${prefix}: custom methods require methodSchemaUri`);
       }
       if (q.hashAlgorithm !== 'blake2b-256') {
         errors.push(`${prefix}: custom methods require hashAlgorithm "blake2b-256"`);
       }
-      if (!q.methodSchemaHash) {
+      if (!q.methodSchemaHash?.trim()) {
         errors.push(`${prefix}: custom methods require methodSchemaHash`);
+      } else if (!HEX64_REGEX.test(q.methodSchemaHash)) {
+        errors.push(`${prefix}: methodSchemaHash must be a 64-char hex string`);
+      }
+    }
+
+    // Built-ins must not include custom schema fields.
+    if (isBuiltinMethod(method)) {
+      if (q.methodSchemaUri !== undefined) {
+        errors.push(`${prefix}: built-in methods must not include methodSchemaUri`);
+      }
+      if (q.hashAlgorithm !== undefined) {
+        errors.push(`${prefix}: built-in methods must not include hashAlgorithm`);
+      }
+      if (q.methodSchemaHash !== undefined) {
+        errors.push(`${prefix}: built-in methods must not include methodSchemaHash`);
       }
     }
   });
-
-  if (!hasRequiredQuestion) {
-    errors.push('at least one question must be mandatory');
-  }
-
-  // Optional field validation
-  if (details.eligibility) {
-    const allowed = ['DRep', 'SPO', 'CC', 'Stakeholder'];
-    for (const role of details.eligibility) {
-      if (!allowed.includes(role)) {
-        errors.push(`Invalid eligibility role: ${role}`);
-      }
-    }
-  }
-
-  if (details.voteWeighting) {
-    if (!['StakeBased', 'CredentialBased'].includes(details.voteWeighting)) {
-      errors.push(`Invalid voteWeighting: ${details.voteWeighting}`);
-    }
-  }
-
-  if (details.referenceAction) {
-    if (!HEX64_REGEX.test(details.referenceAction.transactionId)) {
-      errors.push('referenceAction.transactionId must be a 64-char hex string');
-    }
-    if (
-      details.referenceAction.actionIndex === undefined ||
-      details.referenceAction.actionIndex < 0 ||
-      !Number.isInteger(details.referenceAction.actionIndex)
-    ) {
-      errors.push('referenceAction.actionIndex must be a non-negative integer');
-    }
-  }
-
-  if (details.lifecycle) {
-    const hasEpochLifecycle = details.lifecycle.endEpoch !== undefined || details.lifecycle.startEpoch !== undefined;
-    if (hasEpochLifecycle) {
-      if (
-        details.lifecycle.startEpoch !== undefined &&
-        (details.lifecycle.startEpoch < 0 || !Number.isInteger(details.lifecycle.startEpoch))
-      ) {
-        errors.push('lifecycle.startEpoch must be a non-negative integer');
-      }
-      if (
-        details.lifecycle.endEpoch === undefined ||
-        details.lifecycle.endEpoch < 0 ||
-        !Number.isInteger(details.lifecycle.endEpoch)
-      ) {
-        errors.push('lifecycle.endEpoch must be a non-negative integer');
-      }
-      if (
-        details.lifecycle.startEpoch !== undefined &&
-        details.lifecycle.endEpoch !== undefined &&
-        details.lifecycle.endEpoch < details.lifecycle.startEpoch
-      ) {
-        errors.push('lifecycle.endEpoch must be >= lifecycle.startEpoch');
-      }
-    } else {
-      // Legacy slot-based validation for older payloads
-      if (
-        details.lifecycle.startSlot !== undefined &&
-        (details.lifecycle.startSlot < 0 || !Number.isInteger(details.lifecycle.startSlot))
-      ) {
-        errors.push('lifecycle.startSlot must be a non-negative integer');
-      }
-      if (
-        details.lifecycle.endSlot === undefined ||
-        details.lifecycle.endSlot < 0 ||
-        !Number.isInteger(details.lifecycle.endSlot)
-      ) {
-        errors.push('lifecycle.endSlot must be a non-negative integer');
-      }
-      if (
-        details.lifecycle.startSlot !== undefined &&
-        details.lifecycle.endSlot !== undefined &&
-        details.lifecycle.endSlot < details.lifecycle.startSlot
-      ) {
-        errors.push('lifecycle.endSlot must be >= lifecycle.startSlot');
-      }
-    }
-  }
 
   return { valid: errors.length === 0, errors };
 }
@@ -228,24 +218,13 @@ export function validateSurveyResponse(
   if (!HEX64_REGEX.test(response.surveyTxId)) {
     errors.push('surveyTxId must be a 64-char hex string');
   }
-  if (!HEX64_REGEX.test(response.surveyHash)) {
-    errors.push('surveyHash must be a 64-char hex string');
-  }
 
   const questions = getQuestions(survey);
   const questionById = new Map(questions.map((q) => [q.questionId, q]));
+  const answers: SurveyAnswer[] = response.answers ?? [];
 
-  const answers: SurveyAnswer[] = response.answers !== undefined
-    ? response.answers
-    : [{
-        questionId: questions[0]?.questionId ?? 'q1',
-        selection: response.selection,
-        numericValue: response.numericValue,
-        customValue: response.customValue,
-      }];
-
-  if (!Array.isArray(answers)) {
-    errors.push('answers must be an array');
+  if (answers.length === 0) {
+    errors.push('answers must be non-empty');
     return { valid: false, errors };
   }
 
@@ -285,7 +264,9 @@ export function validateSurveyResponse(
         errors.push(`${prefix}: single-choice must have exactly 1 selection`);
       } else {
         const idxVal = answer.selection![0];
-        if (question.options && (idxVal < 0 || idxVal >= question.options.length)) {
+        if (!Number.isInteger(idxVal) || idxVal < 0) {
+          errors.push(`${prefix}: selection index must be a non-negative integer`);
+        } else if (question.options && idxVal >= question.options.length) {
           errors.push(`${prefix}: selection index ${idxVal} is out of range`);
         }
       }
@@ -293,14 +274,15 @@ export function validateSurveyResponse(
       if (!hasSelection) {
         errors.push(`${prefix}: multi-select answer must use selection`);
       } else {
-        if (
-          question.maxSelections !== undefined &&
-          answer.selection!.length > question.maxSelections
-        ) {
+        if (question.maxSelections !== undefined && answer.selection!.length > question.maxSelections) {
           errors.push(`${prefix}: too many selections`);
         }
         for (const idxVal of answer.selection!) {
-          if (question.options && (idxVal < 0 || idxVal >= question.options.length)) {
+          if (!Number.isInteger(idxVal) || idxVal < 0) {
+            errors.push(`${prefix}: selection index must be a non-negative integer`);
+            continue;
+          }
+          if (question.options && idxVal >= question.options.length) {
             errors.push(`${prefix}: selection index ${idxVal} is out of range`);
           }
         }
@@ -311,50 +293,19 @@ export function validateSurveyResponse(
       } else if (question.numericConstraints) {
         const val = answer.numericValue!;
         const { minValue, maxValue, step } = question.numericConstraints;
-        if (val < minValue || val > maxValue) {
-          errors.push(`${prefix}: numericValue ${val} outside [${minValue}, ${maxValue}]`);
-        }
-        if (step !== undefined && (val - minValue) % step !== 0) {
-          errors.push(`${prefix}: numericValue ${val} violates step ${step}`);
+        if (!Number.isInteger(val)) {
+          errors.push(`${prefix}: numericValue must be an integer`);
+        } else {
+          if (val < minValue || val > maxValue) {
+            errors.push(`${prefix}: numericValue ${val} outside [${minValue}, ${maxValue}]`);
+          }
+          if (step !== undefined && (val - minValue) % step !== 0) {
+            errors.push(`${prefix}: numericValue ${val} violates step ${step}`);
+          }
         }
       }
     } else if (!hasCustom) {
-      errors.push(`${prefix}: free-text/custom answer must use customValue`);
-    }
-  }
-
-  for (const question of questions) {
-    const isRequired = question.required !== false;
-    if (!isRequired) continue;
-
-    if (!seenAnswerIds.has(question.questionId)) {
-      errors.push(`missing required answer for questionId "${question.questionId}"`);
-      continue;
-    }
-
-    const requiredAnswer = answers.find((a) => a.questionId === question.questionId);
-    if (!requiredAnswer) continue;
-
-    if (question.methodType === METHOD_SINGLE_CHOICE || question.methodType === METHOD_MULTI_SELECT) {
-      if (!requiredAnswer.selection || requiredAnswer.selection.length === 0) {
-        errors.push(`questionId "${question.questionId}" requires at least one selection`);
-      }
-      continue;
-    }
-
-    if (question.methodType === METHOD_NUMERIC_RANGE) {
-      if (requiredAnswer.numericValue === undefined) {
-        errors.push(`questionId "${question.questionId}" requires numericValue`);
-      }
-      continue;
-    }
-
-    if (requiredAnswer.customValue === undefined) {
-      errors.push(`questionId "${question.questionId}" requires customValue`);
-      continue;
-    }
-    if (typeof requiredAnswer.customValue === 'string' && requiredAnswer.customValue.trim().length === 0) {
-      errors.push(`questionId "${question.questionId}" requires non-empty customValue`);
+      errors.push(`${prefix}: custom method answer must use customValue`);
     }
   }
 
