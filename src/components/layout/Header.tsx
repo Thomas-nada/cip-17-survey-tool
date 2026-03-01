@@ -1,5 +1,5 @@
 import { useApp } from '../../context/AppContext.tsx';
-import { Wifi, Settings, PlusCircle, LayoutGrid, List, Wallet, LogOut, Loader2, ChevronDown, AlertTriangle } from 'lucide-react';
+import { Wifi, Settings, PlusCircle, LayoutGrid, List, Wallet, LogOut, Loader2, ChevronDown, AlertTriangle, Info } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -131,6 +131,7 @@ export function Header() {
     { path: '/', label: t('header.dashboard'), icon: LayoutGrid },
     { path: '/surveys', label: t('header.surveys'), icon: List },
     { path: '/create', label: t('header.create'), icon: PlusCircle },
+    { path: '/about', label: 'About', icon: Info },
   ];
 
   const handlePreferenceChange = <K extends keyof typeof prefs>(key: K, value: (typeof prefs)[K]) => {

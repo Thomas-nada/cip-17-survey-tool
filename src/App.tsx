@@ -5,6 +5,7 @@ import { DashboardPage } from './pages/DashboardPage.tsx';
 import { CreateSurveyPage } from './pages/CreateSurveyPage.tsx';
 import { SurveyListPage } from './pages/SurveyListPage.tsx';
 import { SurveyDetailPage } from './pages/SurveyDetailPage.tsx';
+import { AboutPage } from './pages/AboutPage.tsx';
 import { I18nProvider } from './context/I18nContext.tsx';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
               <Route path="/create" element={<CreateSurveyPage />} />
               <Route path="/surveys" element={<SurveyListPage />} />
               <Route path="/survey/:surveyTxId" element={<SurveyDetailPage />} />
+              <Route path="/about" element={<AboutPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </PageLayout>
