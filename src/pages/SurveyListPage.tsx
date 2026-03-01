@@ -3,20 +3,31 @@ import { PlusCircle, Inbox, Vote, Search } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import { SurveyCard } from '../components/shared/SurveyCard.tsx';
+import { useI18n } from '../context/I18nContext.tsx';
 
 export function SurveyListPage() {
   const navigate = useNavigate();
   const { state } = useApp();
+  const { t } = useI18n();
   const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
     if (!search.trim()) return state.surveys;
     const q = search.toLowerCase();
     return state.surveys.filter(
-      (s) =>
-        s.details.title.toLowerCase().includes(q) ||
-        s.details.question.toLowerCase().includes(q) ||
-        s.surveyTxId.includes(q)
+      (s) => {
+        const questionsText = (s.details.questions ?? [])
+          .map((item) => item.question)
+          .join(' ')
+          .toLowerCase();
+        const legacyQuestion = (s.details.question ?? '').toLowerCase();
+        return (
+          s.details.title.toLowerCase().includes(q) ||
+          questionsText.includes(q) ||
+          legacyQuestion.includes(q) ||
+          s.surveyTxId.includes(q)
+        );
+      }
     );
   }, [state.surveys, search]);
 
@@ -29,9 +40,9 @@ export function SurveyListPage() {
             <Vote className="w-5 h-5 text-teal-400" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white font-heading">Surveys</h2>
+            <h2 className="text-2xl font-bold text-white font-heading">{t('surveyList.title')}</h2>
             <p className="text-sm text-slate-500">
-              {state.surveys.length} survey{state.surveys.length !== 1 ? 's' : ''} created
+              {t('surveyList.created', { count: state.surveys.length, suffix: state.surveys.length !== 1 ? 's' : '' })}
             </p>
           </div>
         </div>
@@ -40,7 +51,7 @@ export function SurveyListPage() {
           className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-violet-600 hover:from-teal-500 hover:to-violet-500 text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-lg shadow-teal-600/20 hover:shadow-teal-500/25 hover:-translate-y-0.5"
         >
           <PlusCircle className="w-4 h-4" />
-          New Survey
+          {t('surveyList.newSurvey')}
         </button>
       </div>
 
@@ -52,7 +63,7 @@ export function SurveyListPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by title, question, or TxId..."
+            placeholder={t('surveyList.searchPlaceholder')}
             className="w-full bg-slate-800/50 border border-slate-700/30 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500/50 outline-none transition-all"
           />
         </div>
@@ -65,12 +76,12 @@ export function SurveyListPage() {
             <Inbox className="w-10 h-10 text-slate-600" />
           </div>
           <p className="text-slate-400 font-medium mb-1">
-            {search ? 'No matching surveys' : 'No surveys yet'}
+            {search ? t('surveyList.noMatching') : t('surveyList.noSurveys')}
           </p>
           <p className="text-sm text-slate-500 mb-6">
             {search
-              ? 'Try a different search term'
-              : 'Create your first survey to get started'}
+              ? t('surveyList.tryDifferent')
+              : t('surveyList.createFirst')}
           </p>
           {!search && (
             <button
@@ -78,7 +89,7 @@ export function SurveyListPage() {
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-teal-600 to-violet-600 hover:from-teal-500 hover:to-violet-500 text-white rounded-xl font-semibold text-sm transition-all shadow-lg shadow-teal-600/20"
             >
               <PlusCircle className="w-4 h-4" />
-              Create Survey
+              {t('dashboard.createSurvey')}
             </button>
           )}
         </div>

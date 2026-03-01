@@ -15,10 +15,12 @@ import {
   Activity,
   Sparkles,
 } from 'lucide-react';
+import { useI18n } from '../context/I18nContext.tsx';
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { mode, state } = useApp();
+  const { state, mode } = useApp();
+  const { t } = useI18n();
 
   const surveyCount = state.surveys.length;
   const responseCount = Array.from(state.responses.values()).reduce(
@@ -28,7 +30,7 @@ export function DashboardPage() {
   const uniqueVoters = new Set(
     Array.from(state.responses.values())
       .flat()
-      .map((r) => r.responseCredential)
+      .map((r) => r.voterAddress ?? r.responseCredential)
   ).size;
 
   // Get the top 3 most active surveys (by response count)
@@ -43,34 +45,28 @@ export function DashboardPage() {
   return (
     <div className="space-y-12 animate-fadeIn">
       {/* Hero section */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0a0f1a] via-[#0d1220] to-[#0a0f1a] border border-slate-700/30 p-8 md:p-12">
+      <div className="dashboard-hero relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#0a0f1a] via-[#0d1220] to-[#0a0f1a] border border-slate-700/30 p-8 md:p-12">
         {/* Background decorations — teal + violet washes */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-violet-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
 
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs font-semibold tracking-wide">
+            <div className="hero-pill inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs font-semibold tracking-wide">
               <Sparkles className="w-3.5 h-3.5" />
-              Label 17 Proof of Concept
+              {t('dashboard.platform')}
             </div>
-            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide ${
-              mode === 'simulated'
-                ? 'bg-teal-500/10 border border-teal-500/20 text-teal-400'
-                : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-            }`}>
+            <div className="hero-pill inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
               <Activity className="w-3 h-3" />
-              {mode === 'simulated' ? 'Simulated Mode' : 'Preview Testnet'}
+              {mode === 'mainnet' ? t('header.mainnet') : t('header.testnet')}
             </div>
           </div>
 
-          <h1 className="font-heading text-3xl md:text-5xl font-bold text-white mb-4 leading-tight">
-            On-Chain Surveys
-            <span className="brand-gradient-text"> & Polls</span>
+          <h1 className="hero-title font-heading text-3xl md:text-5xl font-bold text-white mb-4 leading-tight">
+            {t('dashboard.onChainSurveys')}
           </h1>
-          <p className="text-base md:text-lg text-slate-400 max-w-2xl mb-8 leading-relaxed">
-            A standardized transaction metadata format for creating and tallying
-            on-chain surveys on Cardano, using label{' '}
+          <p className="hero-subtitle text-base md:text-lg text-slate-400 max-w-2xl mb-8 leading-relaxed">
+            {t('dashboard.createAndTally').replace('17.', '')}{' '}
             <code className="text-teal-400 bg-teal-500/10 px-1.5 py-0.5 rounded-md font-code text-sm">17</code>.
           </p>
 
@@ -80,14 +76,14 @@ export function DashboardPage() {
               className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-600 to-violet-600 hover:from-teal-500 hover:to-violet-500 text-white rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-teal-600/25 hover:shadow-teal-500/30 hover:-translate-y-0.5 active:translate-y-0"
             >
               <PlusCircle className="w-5 h-5" />
-              Create Survey
+              {t('dashboard.createSurvey')}
             </button>
             <button
               onClick={() => navigate('/surveys')}
-              className="flex items-center gap-2 px-6 py-3 bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl font-semibold transition-all duration-200 border border-slate-600/50 hover:border-slate-500"
+              className="hero-secondary-btn flex items-center gap-2 px-6 py-3 bg-slate-700/50 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl font-semibold transition-all duration-200 border border-slate-600/50 hover:border-slate-500"
             >
               <BarChart3 className="w-5 h-5" />
-              Browse Surveys
+              {t('dashboard.browseSurveys')}
             </button>
           </div>
         </div>
@@ -97,7 +93,7 @@ export function DashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           {
-            label: 'Total Surveys',
+            label: t('dashboard.totalSurveys'),
             value: surveyCount,
             icon: Vote,
             color: 'text-teal-400',
@@ -105,7 +101,7 @@ export function DashboardPage() {
             borderColor: 'border-teal-500/20',
           },
           {
-            label: 'Responses',
+            label: t('dashboard.responses'),
             value: responseCount,
             icon: TrendingUp,
             color: 'text-emerald-400',
@@ -113,7 +109,7 @@ export function DashboardPage() {
             borderColor: 'border-emerald-500/20',
           },
           {
-            label: 'Unique Voters',
+            label: t('dashboard.uniqueVoters'),
             value: uniqueVoters,
             icon: Users,
             color: 'text-violet-400',
@@ -121,7 +117,7 @@ export function DashboardPage() {
             borderColor: 'border-violet-500/20',
           },
           {
-            label: 'Avg Responses',
+            label: t('dashboard.avgResponses'),
             value: surveyCount > 0 ? Math.round(responseCount / surveyCount) : 0,
             icon: BarChart3,
             color: 'text-amber-400',
@@ -147,14 +143,14 @@ export function DashboardPage() {
         <div>
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-xl font-bold text-white font-heading">Active Surveys</h2>
-              <p className="text-sm text-slate-500 mt-0.5">Most popular surveys by response count</p>
+              <h2 className="text-xl font-bold text-white font-heading">{t('dashboard.activeSurveys')}</h2>
+              <p className="text-sm text-slate-500 mt-0.5">{t('dashboard.mostPopular')}</p>
             </div>
             <button
               onClick={() => navigate('/surveys')}
               className="flex items-center gap-1.5 text-sm text-teal-400 hover:text-teal-300 font-medium transition-colors"
             >
-              View all
+              {t('dashboard.viewAll')}
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -174,55 +170,55 @@ export function DashboardPage() {
       {/* Features section */}
       <div>
         <div className="mb-5">
-          <h2 className="text-xl font-bold text-white font-heading">What This Demonstrates</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Core specification capabilities implemented in this proof of concept</p>
+          <h2 className="text-xl font-bold text-white font-heading">{t('dashboard.platformCapabilities')}</h2>
+          <p className="text-sm text-slate-500 mt-0.5">{t('dashboard.productionReady')}</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
             {
               icon: FileJson,
-              title: 'Metadata Format',
-              desc: 'Label 17 payloads with surveyDetails and surveyResponse structures following the specification',
+              title: t('dashboard.cap1Title'),
+              desc: t('dashboard.cap1Desc'),
               color: 'text-teal-400',
               bg: 'from-teal-500/5 to-teal-500/0',
               border: 'border-teal-500/10 hover:border-teal-500/30',
             },
             {
               icon: Hash,
-              title: 'Survey Hashing',
-              desc: 'Blake2b-256 of canonical CBOR (RFC 8949 CDE) for deterministic survey identification',
+              title: t('dashboard.cap2Title'),
+              desc: t('dashboard.cap2Desc'),
               color: 'text-emerald-400',
               bg: 'from-emerald-500/5 to-emerald-500/0',
               border: 'border-emerald-500/10 hover:border-emerald-500/30',
             },
             {
               icon: Layers,
-              title: 'Three Method Types',
-              desc: 'Single-choice, multi-select, and numeric-range with full constraint validation',
+              title: t('dashboard.cap3Title'),
+              desc: t('dashboard.cap3Desc'),
               color: 'text-violet-400',
               bg: 'from-violet-500/5 to-violet-500/0',
               border: 'border-violet-500/10 hover:border-violet-500/30',
             },
             {
               icon: Shield,
-              title: 'Response Validation',
-              desc: 'Enforces selection counts, range bounds, step constraints, and hash integrity',
+              title: t('dashboard.cap4Title'),
+              desc: t('dashboard.cap4Desc'),
               color: 'text-amber-400',
               bg: 'from-amber-500/5 to-amber-500/0',
               border: 'border-amber-500/10 hover:border-amber-500/30',
             },
             {
               icon: BarChart3,
-              title: 'Tallying Engine',
-              desc: 'Deduplication by credential, latest-response-wins, credential-based and stake-based weighting',
+              title: t('dashboard.cap5Title'),
+              desc: t('dashboard.cap5Desc'),
               color: 'text-pink-400',
               bg: 'from-pink-500/5 to-pink-500/0',
               border: 'border-pink-500/10 hover:border-pink-500/30',
             },
             {
               icon: Vote,
-              title: 'Dual Mode',
-              desc: 'Simulated in-memory blockchain with demo data or Cardano Preview Testnet via Blockfrost',
+              title: t('dashboard.cap6Title'),
+              desc: t('dashboard.cap6Desc'),
               color: 'text-cyan-400',
               bg: 'from-cyan-500/5 to-cyan-500/0',
               border: 'border-cyan-500/10 hover:border-cyan-500/30',

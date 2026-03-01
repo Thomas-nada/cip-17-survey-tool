@@ -1,8 +1,7 @@
 /**
  * Blockchain Service Interface
  *
- * Strategy pattern: both SimulatedBlockchain and TestnetBlockchain
- * implement this interface. The active mode determines which is used.
+ * Implemented by the active blockchain backend for this app.
  */
 import type {
   SurveyDetails,
@@ -15,7 +14,7 @@ import type {
 
 export interface BlockchainService {
   /** The current mode */
-  readonly mode: 'simulated' | 'testnet';
+  readonly mode: 'mainnet' | 'testnet';
 
   /** Submit a survey definition, returning the surveyTxId and surveyHash */
   createSurvey(
@@ -33,5 +32,5 @@ export interface BlockchainService {
   listSurveys(): Promise<StoredSurvey[]>;
 
   /** Fetch all responses for a given surveyTxId */
-  getResponses(surveyTxId: string): Promise<StoredResponse[]>;
+  getResponses(surveyTxId: string, sinceSlot?: number): Promise<StoredResponse[]>;
 }

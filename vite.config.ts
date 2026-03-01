@@ -18,6 +18,14 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+      },
+    },
+  },
   // For GitHub Pages: set to your repo name when deploying
   base: process.env.GITHUB_PAGES === 'true' ? '/cip-17-survey-tool/' : '/',
   build: {

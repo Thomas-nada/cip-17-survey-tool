@@ -1,4 +1,5 @@
 import { Plus, Trash2, GripVertical } from 'lucide-react';
+import { useI18n } from '../../context/I18nContext.tsx';
 
 interface Props {
   options: string[];
@@ -15,6 +16,7 @@ export function OptionsEditor({
   onMaxSelectionsChange,
   showMaxSelections = false,
 }: Props) {
+  const { t } = useI18n();
   const addOption = () => {
     onChange([...options, '']);
   };
@@ -38,9 +40,9 @@ export function OptionsEditor({
   return (
     <div className="space-y-3">
       <label className="block text-sm font-medium text-slate-300">
-        Options <span className="text-red-400">*</span>
+        {t('create.options')} <span className="text-red-400">*</span>
         <span className="text-slate-500 font-normal ml-2">
-          (min 2 required)
+          ({t('create.min2Required')})
         </span>
       </label>
 
@@ -55,7 +57,7 @@ export function OptionsEditor({
               type="text"
               value={opt}
               onChange={(e) => updateOption(index, e.target.value)}
-              placeholder={`Option ${index + 1}`}
+              placeholder={`${t('create.option')} ${index + 1}`}
               className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
             />
             <button
@@ -80,13 +82,13 @@ export function OptionsEditor({
         className="flex items-center gap-1.5 text-sm text-teal-400 hover:text-teal-300 transition-colors"
       >
         <Plus className="w-4 h-4" />
-        Add Option
+        {t('create.addOption')}
       </button>
 
       {showMaxSelections && (
         <div className="mt-4">
           <label className="block text-sm font-medium text-slate-300 mb-1">
-            Max Selections <span className="text-red-400">*</span>
+            {t('create.maxSelections')} <span className="text-red-400">*</span>
           </label>
           <input
             type="number"
@@ -99,8 +101,7 @@ export function OptionsEditor({
             className="w-32 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
           />
           <p className="text-xs text-slate-500 mt-1">
-            Voters can select up to {maxSelections ?? 1} of{' '}
-            {options.length} options
+            {t('create.votersSelectUpTo', { count: maxSelections ?? 1, total: options.length })}
           </p>
         </div>
       )}

@@ -6,6 +6,9 @@ import {
 
 export const SPEC_VERSION = '1.0.0';
 export const METADATA_LABEL = 17;
+export const DEFAULT_CUSTOM_METHOD_URN = 'urn:cardano:poll-method:custom:v1';
+export const DEFAULT_FREETEXT_SCHEMA_URI = 'urn:cardano:poll-method-schema:freetext:v1';
+export const DEFAULT_FREETEXT_SCHEMA_HASH = '0000000000000000000000000000000000000000000000000000000000000000';
 
 export const BUILTIN_METHODS = [
   {

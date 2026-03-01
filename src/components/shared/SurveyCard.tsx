@@ -13,25 +13,26 @@ import {
   METHOD_NUMERIC_RANGE,
 } from '../../types/survey.ts';
 import type { StoredSurvey } from '../../types/survey.ts';
+import { useI18n } from '../../context/I18nContext.tsx';
 
 const METHOD_CONFIG = {
   [METHOD_SINGLE_CHOICE]: {
     icon: ListChecks,
-    label: 'Single Choice',
+    label: 'detail.methodSingleChoice',
     color: 'text-teal-400',
     bg: 'bg-teal-500/10',
     border: 'border-teal-500/20',
   },
   [METHOD_MULTI_SELECT]: {
     icon: CheckSquare,
-    label: 'Multi-Select',
+    label: 'detail.methodMultiSelect',
     color: 'text-purple-400',
     bg: 'bg-purple-500/10',
     border: 'border-purple-500/20',
   },
   [METHOD_NUMERIC_RANGE]: {
     icon: Sliders,
-    label: 'Numeric Range',
+    label: 'detail.methodNumericRange',
     color: 'text-amber-400',
     bg: 'bg-amber-500/10',
     border: 'border-amber-500/20',
@@ -45,15 +46,32 @@ interface Props {
 }
 
 export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
+  const { t } = useI18n();
   const { details } = survey;
-  const config = METHOD_CONFIG[details.methodType as keyof typeof METHOD_CONFIG] ?? {
+  const questions = details.questions && details.questions.length > 0
+    ? details.questions
+    : (details.question && details.methodType
+      ? [{
+        questionId: 'q1',
+        question: details.question,
+        methodType: details.methodType,
+      }]
+      : []);
+  const firstMethod = questions[0]?.methodType;
+  const mixedMethods = questions.length > 1 && new Set(questions.map((q) => q.methodType)).size > 1;
+  const config = METHOD_CONFIG[firstMethod as keyof typeof METHOD_CONFIG] ?? {
     icon: Hash,
-    label: 'Custom',
+    label: 'Free-text',
     color: 'text-slate-400',
     bg: 'bg-slate-400/10',
     border: 'border-slate-400/20',
   };
   const Icon = config.icon;
+  const questionPreview = questions.length === 0
+    ? ''
+    : questions.length === 1
+      ? questions[0].question
+      : `${questions.length} questions`;
 
   return (
     <button
@@ -66,7 +84,9 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
           <div className="flex items-center gap-2 mb-3">
             <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${config.color} ${config.bg} border ${config.border}`}>
               <Icon className="w-3 h-3" />
-              {config.label}
+              {mixedMethods
+                ? 'Mixed'
+                : (config.label.startsWith('detail.') ? t(config.label) : config.label)}
             </div>
             {details.eligibility && (
               <div className="flex gap-1">
@@ -75,7 +95,7 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
                     key={role}
                     className="text-[10px] px-2 py-0.5 rounded-md bg-slate-700/50 text-slate-400 font-medium border border-slate-600/30"
                   >
-                    {role}
+                    {t(`role.${role}`)}
                   </span>
                 ))}
               </div>
@@ -87,7 +107,7 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
             {details.title}
           </h3>
           <p className="text-sm text-slate-400 line-clamp-2 mb-4 leading-relaxed">
-            {details.question}
+            {questionPreview}
           </p>
 
           {/* Meta row */}
@@ -98,12 +118,12 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
             </span>
             <span className="flex items-center gap-1.5">
               <Users className="w-3 h-3" />
-              <span className="font-semibold text-slate-400">{responseCount}</span> responses
+              <span className="font-semibold text-slate-400">{responseCount}</span> {t('detail.responses')}
             </span>
-            {details.lifecycle && (
+            {details.lifecycle?.endSlot != null && (
               <span className="hidden sm:flex items-center gap-1.5">
                 <Clock className="w-3 h-3" />
-                Ends epoch {details.lifecycle.endEpoch.toLocaleString()}
+                Ends slot {details.lifecycle.endSlot.toLocaleString()}
               </span>
             )}
           </div>
@@ -114,13 +134,13 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
           {responseCount > 0 && (
             <div className="hidden sm:flex flex-col items-center justify-center bg-slate-700/30 rounded-lg px-3 py-2 min-w-[60px]">
               <span className="text-lg font-bold text-white font-heading">{responseCount}</span>
-              <span className="text-[10px] text-slate-500">votes</span>
+              <span className="text-[10px] text-slate-500">{t('surveyCard.votes')}</span>
             </div>
           )}
           {/* Vote CTA */}
           <div className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-teal-600 to-teal-700 group-hover:from-teal-500 group-hover:to-teal-600 text-white rounded-lg text-xs font-semibold transition-all shadow-md shadow-teal-600/20 group-hover:shadow-teal-500/30">
             <Vote className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Vote</span>
+            <span className="hidden sm:inline">{t('detail.vote')}</span>
           </div>
         </div>
       </div>

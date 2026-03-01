@@ -27,7 +27,20 @@ export interface ReferenceAction {
 }
 
 export interface Lifecycle {
-  endEpoch: number;
+  startSlot?: number;
+  endSlot: number;
+}
+
+export interface SurveyQuestion {
+  questionId: string;
+  question: string;
+  methodType: MethodType;
+  options?: string[];
+  maxSelections?: number;
+  numericConstraints?: NumericConstraints;
+  methodSchemaUri?: string;
+  hashAlgorithm?: string;
+  methodSchemaHash?: string;
 }
 
 // ─── Survey Details (label 17 surveyDetails payload) ────────────────
@@ -35,8 +48,11 @@ export interface SurveyDetails {
   specVersion: string;
   title: string;
   description: string;
-  question: string;
-  methodType: MethodType;
+  // New schema
+  questions?: SurveyQuestion[];
+  // Legacy single-question schema (kept for backward compatibility while reading chain history)
+  question?: string;
+  methodType?: MethodType;
   options?: string[];
   maxSelections?: number;
   numericConstraints?: NumericConstraints;
@@ -49,11 +65,30 @@ export interface SurveyDetails {
   lifecycle?: Lifecycle;
 }
 
+export interface SurveyAnswer {
+  questionId: string;
+  selection?: number[];
+  numericValue?: number;
+  customValue?: unknown;
+}
+
 // ─── Survey Response (label 17 surveyResponse payload) ──────────────
 export interface SurveyResponse {
   specVersion: string;
   surveyTxId: string;
   surveyHash: string;
+  /** Canonical voter identifier, e.g. DRep ID or wallet address */
+  responseCredential?: string;
+  /** Optional cryptographic identity proof (CLI / non-hot-wallet flows) */
+  proof?: {
+    message: string;
+    key: string;
+    signature: string;
+    scheme?: string;
+  };
+  // New schema
+  answers?: SurveyAnswer[];
+  // Legacy single-answer schema
   selection?: number[];
   numericValue?: number;
   customValue?: unknown;
@@ -84,9 +119,21 @@ export interface StoredSurvey {
 
 export interface StoredResponse {
   txId: string;
+  /** Canonical credential used for deduplication/tally display */
   responseCredential: string;
+  /** Claimed credential from metadata payload (untrusted) */
+  claimedCredential?: string;
+  /** Optional wallet address observed from tx inputs (for stake lookups) */
+  voterAddress?: string;
+  /** Whether claimed identity could be verified against tx signer */
+  identityVerified?: boolean;
+  /** Reason identity was not verified (if any) */
+  identityVerificationReason?: string;
+  /** UTC timestamp in milliseconds since epoch */
+  timestampMs?: number;
   surveyTxId: string;
   surveyHash: string;
+  answers?: SurveyAnswer[];
   selection?: number[];
   numericValue?: number;
   customValue?: unknown;
@@ -111,11 +158,25 @@ export interface NumericTally {
   bins: { range: string; count: number }[];
 }
 
+export interface QuestionTally {
+  questionId: string;
+  question: string;
+  methodType: MethodType;
+  optionTallies?: OptionTally[];
+  numericTally?: NumericTally;
+  customTexts?: string[];
+}
+
 export interface TallyResult {
   surveyTxId: string;
   totalResponses: number;
   uniqueCredentials: number;
   weighting: VoteWeighting;
+  /** Total voting weight (ADA for StakeBased, count for CredentialBased) */
+  totalWeight: number;
+  // New schema
+  questionTallies?: QuestionTally[];
+  // Legacy single-question fields
   optionTallies?: OptionTally[];
   numericTally?: NumericTally;
 }

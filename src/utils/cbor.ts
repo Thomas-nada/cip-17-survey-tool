@@ -10,7 +10,29 @@
  * which sorts map keys by encoded byte length then lexicographically.
  */
 import { encode, cdeEncodeOptions } from 'cbor2';
-import type { SurveyDetails } from '../types/survey.ts';
+import type { SurveyDetails, SurveyQuestion } from '../types/survey.ts';
+
+function questionToMap(question: SurveyQuestion): Map<string, unknown> {
+  const q = new Map<string, unknown>();
+  q.set('questionId', question.questionId);
+  q.set('question', question.question);
+  q.set('methodType', question.methodType);
+  if (question.options !== undefined) q.set('options', question.options);
+  if (question.maxSelections !== undefined) q.set('maxSelections', question.maxSelections);
+  if (question.numericConstraints !== undefined) {
+    const nc = new Map<string, unknown>();
+    nc.set('minValue', question.numericConstraints.minValue);
+    nc.set('maxValue', question.numericConstraints.maxValue);
+    if (question.numericConstraints.step !== undefined) {
+      nc.set('step', question.numericConstraints.step);
+    }
+    q.set('numericConstraints', nc);
+  }
+  if (question.methodSchemaUri !== undefined) q.set('methodSchemaUri', question.methodSchemaUri);
+  if (question.hashAlgorithm !== undefined) q.set('hashAlgorithm', question.hashAlgorithm);
+  if (question.methodSchemaHash !== undefined) q.set('methodSchemaHash', question.methodSchemaHash);
+  return q;
+}
 
 /**
  * Convert a SurveyDetails object into a Map suitable for canonical CBOR encoding.
@@ -26,35 +48,40 @@ function surveyDetailsToMap(details: SurveyDetails): Map<string, unknown> {
   m.set('specVersion', details.specVersion);
   m.set('title', details.title);
   m.set('description', details.description);
-  m.set('question', details.question);
-  m.set('methodType', details.methodType);
+  if (details.questions && details.questions.length > 0) {
+    m.set('questions', details.questions.map(questionToMap));
+  } else {
+    // Legacy single-question payload support
+    m.set('question', details.question);
+    m.set('methodType', details.methodType);
+  }
 
-  // Conditional fields
-  if (details.options !== undefined) {
-    m.set('options', details.options);
-  }
-  if (details.maxSelections !== undefined) {
-    m.set('maxSelections', details.maxSelections);
-  }
-  if (details.numericConstraints !== undefined) {
-    const nc = new Map<string, unknown>();
-    nc.set('minValue', details.numericConstraints.minValue);
-    nc.set('maxValue', details.numericConstraints.maxValue);
-    if (details.numericConstraints.step !== undefined) {
-      nc.set('step', details.numericConstraints.step);
+  // Legacy single-question conditional fields
+  if (!details.questions || details.questions.length === 0) {
+    if (details.options !== undefined) {
+      m.set('options', details.options);
     }
-    m.set('numericConstraints', nc);
-  }
-
-  // Custom method fields
-  if (details.methodSchemaUri !== undefined) {
-    m.set('methodSchemaUri', details.methodSchemaUri);
-  }
-  if (details.hashAlgorithm !== undefined) {
-    m.set('hashAlgorithm', details.hashAlgorithm);
-  }
-  if (details.methodSchemaHash !== undefined) {
-    m.set('methodSchemaHash', details.methodSchemaHash);
+    if (details.maxSelections !== undefined) {
+      m.set('maxSelections', details.maxSelections);
+    }
+    if (details.numericConstraints !== undefined) {
+      const nc = new Map<string, unknown>();
+      nc.set('minValue', details.numericConstraints.minValue);
+      nc.set('maxValue', details.numericConstraints.maxValue);
+      if (details.numericConstraints.step !== undefined) {
+        nc.set('step', details.numericConstraints.step);
+      }
+      m.set('numericConstraints', nc);
+    }
+    if (details.methodSchemaUri !== undefined) {
+      m.set('methodSchemaUri', details.methodSchemaUri);
+    }
+    if (details.hashAlgorithm !== undefined) {
+      m.set('hashAlgorithm', details.hashAlgorithm);
+    }
+    if (details.methodSchemaHash !== undefined) {
+      m.set('methodSchemaHash', details.methodSchemaHash);
+    }
   }
 
   // Optional fields
@@ -72,7 +99,13 @@ function surveyDetailsToMap(details: SurveyDetails): Map<string, unknown> {
   }
   if (details.lifecycle !== undefined) {
     const lc = new Map<string, unknown>();
-    lc.set('endEpoch', details.lifecycle.endEpoch);
+    // Support both new (endEpoch) and legacy (startSlot/endSlot) formats
+    const lcAny = details.lifecycle as unknown as Record<string, unknown>;
+    for (const [key, val] of Object.entries(lcAny)) {
+      if (val !== undefined) {
+        lc.set(key, val);
+      }
+    }
     m.set('lifecycle', lc);
   }
 
