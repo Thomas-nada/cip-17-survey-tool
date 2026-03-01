@@ -1,42 +1,21 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { ELIGIBILITY_ROLES, VOTE_WEIGHTINGS } from '../../constants/methodTypes.ts';
 import type {
-  EligibilityRole,
-  VoteWeighting,
   ReferenceAction,
 } from '../../types/survey.ts';
 import { useI18n } from '../../context/I18nContext.tsx';
 
 interface Props {
-  eligibility?: EligibilityRole[];
-  onEligibilityChange: (roles: EligibilityRole[] | undefined) => void;
-  voteWeighting?: VoteWeighting;
-  onVoteWeightingChange: (w: VoteWeighting | undefined) => void;
   referenceAction?: ReferenceAction;
   onReferenceActionChange: (ra: ReferenceAction | undefined) => void;
 }
 
 export function OptionalFieldsEditor({
-  eligibility,
-  onEligibilityChange,
-  voteWeighting,
-  onVoteWeightingChange,
   referenceAction,
   onReferenceActionChange,
 }: Props) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-
-  const toggleEligibility = (role: EligibilityRole) => {
-    const current = eligibility ?? [];
-    if (current.includes(role)) {
-      const updated = current.filter((r) => r !== role);
-      onEligibilityChange(updated.length > 0 ? updated : undefined);
-    } else {
-      onEligibilityChange([...current, role]);
-    }
-  };
 
   return (
     <div className="border border-slate-700 rounded-xl overflow-hidden">
@@ -57,57 +36,6 @@ export function OptionalFieldsEditor({
 
       {expanded && (
         <div className="p-4 space-y-6 bg-slate-900/50">
-          {/* Eligibility */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              {t('create.eligibilityRoles')}
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {ELIGIBILITY_ROLES.map((role) => (
-                <button
-                  key={role}
-                  type="button"
-                  onClick={() => toggleEligibility(role)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    eligibility?.includes(role)
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
-                  }`}
-                >
-                  {t(`role.${role}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Vote Weighting */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              {t('create.voteWeighting')}
-            </label>
-            <div className="flex gap-3">
-              {VOTE_WEIGHTINGS.map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  onClick={() =>
-                    onVoteWeightingChange(voteWeighting === w ? undefined : w)
-                  }
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    voteWeighting === w
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
-                  }`}
-                >
-                  {w === 'StakeBased' ? t('results.stakeBased') : t('results.credentialBased')}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              {t('create.defaultCredentialBased')}
-            </p>
-          </div>
-
           {/* Reference Action */}
           <div>
             <div className="flex items-center gap-2 mb-2">

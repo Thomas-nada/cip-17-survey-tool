@@ -10,6 +10,8 @@ import { useApp } from '../../context/AppContext.tsx';
 import { useI18n } from '../../context/I18nContext.tsx';
 import { validateSurveyDetails } from '../../utils/validation.ts';
 import {
+  ELIGIBILITY_ROLES,
+  VOTE_WEIGHTINGS,
   DEFAULT_CUSTOM_METHOD_URN,
   DEFAULT_FREETEXT_SCHEMA_HASH,
   DEFAULT_FREETEXT_SCHEMA_URI,
@@ -156,6 +158,12 @@ export function SurveyCreationForm({ onCreated }: Props) {
     if (!nonEmptyQuestions.some((q) => q.required)) {
       errors.push('at least one question must be mandatory');
     }
+    if (!eligibility || eligibility.length === 0) {
+      errors.push('eligibility must include at least one role');
+    }
+    if (!voteWeighting) {
+      errors.push('voteWeighting is required');
+    }
     const endEpoch = lifecycle.endEpoch;
     if (!Number.isInteger(endEpoch ?? NaN)) {
       errors.push('lifecycle.endEpoch is required');
@@ -181,7 +189,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
       }
     });
     return { valid: errors.length === 0, errors };
-  }, [title, description, questions, nonEmptyQuestions.length, buildQuestionFromDraft, lifecycle.endEpoch, currentEpoch]);
+  }, [title, description, questions, nonEmptyQuestions.length, buildQuestionFromDraft, lifecycle.endEpoch, currentEpoch, eligibility, voteWeighting]);
 
   const isFormFilled = title.trim() && description.trim() && nonEmptyQuestions.length > 0;
   const createMsg = title ? [title] : undefined;
@@ -537,12 +545,65 @@ export function SurveyCreationForm({ onCreated }: Props) {
             </div>
           </div>
 
+          {/* Eligibility (Required) */}
+          <div className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              {t('create.eligibilityRoles')} <span className="text-red-400">*</span>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {ELIGIBILITY_ROLES.map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => {
+                    const current = eligibility ?? [];
+                    if (current.includes(role)) {
+                      const updated = current.filter((r) => r !== role);
+                      setEligibility(updated.length > 0 ? updated : undefined);
+                    } else {
+                      setEligibility([...current, role]);
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    eligibility?.includes(role)
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
+                  }`}
+                >
+                  {t(`role.${role}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Vote Weighting (Required) */}
+          <div className="border border-slate-700 rounded-xl p-4 bg-slate-900/40">
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              {t('create.voteWeighting')} <span className="text-red-400">*</span>
+            </label>
+            <div className="flex gap-3">
+              {VOTE_WEIGHTINGS.map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setVoteWeighting(w)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    voteWeighting === w
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
+                  }`}
+                >
+                  {w === 'StakeBased' ? t('results.stakeBased') : t('results.credentialBased')}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {t('create.defaultCredentialBased')}
+            </p>
+          </div>
+
           {/* Optional Fields */}
           <OptionalFieldsEditor
-            eligibility={eligibility}
-            onEligibilityChange={setEligibility}
-            voteWeighting={voteWeighting}
-            onVoteWeightingChange={setVoteWeighting}
             referenceAction={referenceAction}
             onReferenceActionChange={setReferenceAction}
           />
