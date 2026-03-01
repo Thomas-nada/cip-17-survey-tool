@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: cip-17-survey-tool-api
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run server
+    autoDeploy: true
+    envVars:
+      - key: BLOCKFROST_MAINNET_PROJECT_ID
+        sync: false
+      - key: BLOCKFROST_TESTNET_PROJECT_ID
+        sync: false
+      - key: INDEX_TTL_MS
+        value: "30000"
+      - key: CORS_ORIGIN
+        value: "*"
+
+  - type: static_site
+    name: cip-17-survey-tool-web
+    buildCommand: npm install && npx vite build
+    staticPublishPath: dist
+    autoDeploy: true
+    envVars:
+      - key: VITE_BACKEND_API_BASE
+        value: https://cip-17-survey-tool-letd.onrender.com/api
