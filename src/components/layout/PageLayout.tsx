@@ -128,6 +128,12 @@ export function PageLayout({ children }: { children: ReactNode }) {
           </span>
           <span>{t('layout.footerNetworks')}</span>
         </div>
+        <div
+          className="pointer-events-none select-none text-[10px] tracking-[0.14em] uppercase text-slate-700/50 text-right pr-6 pb-2 opacity-30 hover:opacity-80 transition-opacity"
+          title="Easter egg"
+        >
+          AI helped build this tool. Your jobs are safe... for now.
+        </div>
       </footer>
     </div>
   );
