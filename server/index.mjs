@@ -8,6 +8,7 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 8787);
 const INDEX_TTL_MS = Number(process.env.INDEX_TTL_MS || 30_000);
+const INDEX_REFRESH_MS = Number(process.env.INDEX_REFRESH_MS || 180_000);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 const NETWORKS = {
@@ -25,6 +26,10 @@ const NETWORKS = {
 const indexCache = {
   mainnet: { at: 0, surveys: [], responsesBySurvey: new Map() },
   testnet: { at: 0, surveys: [], responsesBySurvey: new Map() },
+};
+const indexRefreshLocks = {
+  mainnet: false,
+  testnet: false,
 };
 
 function applyCors(req, res, next) {
@@ -100,10 +105,10 @@ async function fetchLabel17Entries(network) {
   return all;
 }
 
-async function buildIndex(network) {
+async function buildIndex(network, force = false) {
   const now = Date.now();
   const cached = indexCache[network];
-  if (cached.at > 0 && now - cached.at < INDEX_TTL_MS) return cached;
+  if (!force && cached.at > 0 && now - cached.at < INDEX_TTL_MS) return cached;
 
   const entries = await fetchLabel17Entries(network);
   const txCache = new Map();
@@ -173,6 +178,41 @@ async function buildIndex(network) {
   const next = { at: now, surveys, responsesBySurvey };
   indexCache[network] = next;
   return next;
+}
+
+async function refreshIndex(network) {
+  const normalized = normalizeNetwork(network);
+  if (indexRefreshLocks[normalized]) return;
+  indexRefreshLocks[normalized] = true;
+  try {
+    await buildIndex(normalized, true);
+    console.log(`[index] refreshed ${normalized} (${new Date().toISOString()})`);
+  } catch (err) {
+    console.warn(`[index] refresh failed for ${normalized}:`, err instanceof Error ? err.message : err);
+  } finally {
+    indexRefreshLocks[normalized] = false;
+  }
+}
+
+function startIndexRefresher() {
+  if (INDEX_REFRESH_MS <= 0) {
+    console.log('[index] refresher disabled (INDEX_REFRESH_MS <= 0)');
+    return;
+  }
+
+  const refreshAll = async () => {
+    await Promise.all([
+      refreshIndex('mainnet'),
+      refreshIndex('testnet'),
+    ]);
+  };
+
+  // Prime cache quickly after startup.
+  void refreshAll();
+  setInterval(() => {
+    void refreshAll();
+  }, INDEX_REFRESH_MS);
+  console.log(`[index] background refresher every ${Math.round(INDEX_REFRESH_MS / 1000)}s`);
 }
 
 app.get('/api/health', (req, res) => {
@@ -315,4 +355,5 @@ app.listen(PORT, () => {
   console.log(`[api] listening on http://localhost:${PORT}`);
   console.log(`[api] mainnet key: ${NETWORKS.mainnet.key ? 'configured' : 'missing'}`);
   console.log(`[api] testnet key: ${NETWORKS.testnet.key ? 'configured' : 'missing'}`);
+  startIndexRefresher();
 });

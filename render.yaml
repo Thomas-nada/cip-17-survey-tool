@@ -13,6 +13,8 @@ services:
         sync: false
       - key: INDEX_TTL_MS
         value: "30000"
+      - key: INDEX_REFRESH_MS
+        value: "180000"
       - key: CORS_ORIGIN
         value: "*"
 
