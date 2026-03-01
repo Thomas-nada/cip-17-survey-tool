@@ -172,11 +172,15 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   const mixedStakeholderGovernanceSurvey =
     requiredRoles.includes('Stakeholder') &&
     requiredRoles.some((r) => r === 'DRep' || r === 'SPO' || r === 'CC');
-  const ccSpoOnlySurvey =
+  const roleSupportsWallet = (role: EligibilityRole | null) =>
+    role === 'DRep' || role === 'Stakeholder';
+  const selectedRoleRequiresCli = selectedVoteRole !== null && !roleSupportsWallet(selectedVoteRole);
+  const surveyRequiresCliOnly =
     requiredRoles.length > 0 &&
-    requiredRoles.every((r) => r === 'CC' || r === 'SPO');
-  const forceCliOnlySurvey = requiredRoles.includes('CC') || requiredRoles.includes('SPO');
-  const hasWalletVotingPath = Boolean(wallet.connectedWallet && !forceCliOnlySurvey);
+    requiredRoles.every((r) => !roleSupportsWallet(r));
+  const hasWalletVotingPath = Boolean(
+    wallet.connectedWallet && (selectedVoteRole === null || roleSupportsWallet(selectedVoteRole))
+  );
 
   useEffect(() => {
     if (requiredRoles.length === 0) {
@@ -191,7 +195,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   }, [requiredRoles]);
 
   const effectiveCredential = useMemo(() => {
-    if (cliMode && (!wallet.connectedWallet || forceCliOnlySurvey)) return cliCredential.trim();
+    if (cliMode && (!wallet.connectedWallet || selectedRoleRequiresCli)) return cliCredential.trim();
     const prefersDRepCredential = selectedVoteRole === 'DRep';
     if (prefersDRepCredential && eligibility.drepId && eligibility.walletRoles.includes('DRep')) {
       return eligibility.drepId;
@@ -201,7 +205,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
     cliMode,
     cliCredential,
     wallet.connectedWallet,
-    forceCliOnlySurvey,
+    selectedRoleRequiresCli,
     eligibility.drepId,
     eligibility.walletRoles,
     selectedVoteRole,
@@ -427,16 +431,16 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   }, [proofChallenge]);
 
   useEffect(() => {
-    if (wallet.connectedWallet && cliMode && !forceCliOnlySurvey) {
+    if (wallet.connectedWallet && cliMode && !selectedRoleRequiresCli) {
       setCliMode(false);
     }
-  }, [wallet.connectedWallet, cliMode, forceCliOnlySurvey]);
+  }, [wallet.connectedWallet, cliMode, selectedRoleRequiresCli]);
 
   useEffect(() => {
-    if (forceCliOnlySurvey && !cliMode) {
+    if (selectedRoleRequiresCli && !cliMode) {
       setCliMode(true);
     }
-  }, [forceCliOnlySurvey, cliMode]);
+  }, [selectedRoleRequiresCli, cliMode]);
 
   useEffect(() => {
     const apply = () => setPrefs(getUserPreferences());
@@ -628,7 +632,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       }
 
       const msg = [`Response to ${survey.details.title}`];
-      if (cliMode && (!wallet.connectedWallet || forceCliOnlySurvey)) {
+      if (cliMode && (!wallet.connectedWallet || selectedRoleRequiresCli)) {
         if (cliProofRole && !cliProofValidated) {
           toast.error(t('vote.validateDrepBeforeCli'));
           return;
@@ -940,24 +944,24 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       )}
 
       {/* Wallet / CLI mode selection for testnet */}
-      {isOnChainMode && (!wallet.connectedWallet || forceCliOnlySurvey) && (
+      {isOnChainMode && (!wallet.connectedWallet || selectedRoleRequiresCli) && (
         <div className="space-y-3 animate-fadeIn">
           <div className="flex items-center justify-between gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
             <div className="flex items-center gap-3">
               <Wallet className="w-5 h-5 text-amber-400 flex-shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-amber-300">
-                  {forceCliOnlySurvey ? 'CLI-only survey (CC/SPO required)' : t('vote.walletNotConnected')}
+                  {selectedRoleRequiresCli ? 'CLI required for selected role (CC/SPO)' : t('vote.walletNotConnected')}
                 </p>
                 <p className="text-xs text-amber-400/70 mt-0.5">
-                  {forceCliOnlySurvey ? 'Connected wallets are ignored for submission here.' : t('vote.connectOrCli')}
+                  {selectedRoleRequiresCli ? 'Switch role to DRep/Stakeholder to use wallet voting.' : t('vote.connectOrCli')}
                 </p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setCliMode((v) => !v)}
-              disabled={forceCliOnlySurvey}
+              disabled={selectedRoleRequiresCli}
               className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
                 cliMode
                   ? 'bg-teal-500/15 border-teal-500/30 text-teal-300'
@@ -965,7 +969,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
               }`}
               >
                 <Terminal className="w-3.5 h-3.5" />
-              {forceCliOnlySurvey ? 'CLI required' : (cliMode ? t('vote.cliEnabled') : t('vote.useCli'))}
+              {selectedRoleRequiresCli ? 'CLI required' : (cliMode ? t('vote.cliEnabled') : t('vote.useCli'))}
             </button>
           </div>
 
@@ -1185,7 +1189,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       )}
 
       {/* CLI eligibility status */}
-      {hasEligibilityRestrictions && isOnChainMode && (!wallet.connectedWallet || forceCliOnlySurvey) && cliMode && (
+      {hasEligibilityRestrictions && isOnChainMode && (!wallet.connectedWallet || selectedRoleRequiresCli) && cliMode && (
         <div className="animate-fadeIn">
           {cliChecking && (
             <div className="flex items-center gap-3 p-4 bg-slate-800/40 border border-slate-700/30 rounded-xl">
@@ -1240,8 +1244,8 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       <div className="space-y-2">
         {(() => {
           const walletBlocked = isOnChainMode && !hasWalletVotingPath && !cliMode;
-          const cliPath = isOnChainMode && cliMode && (!wallet.connectedWallet || forceCliOnlySurvey);
-          const ccSpoWalletBlocked = Boolean(isOnChainMode && wallet.connectedWallet && ccSpoOnlySurvey);
+          const cliPath = isOnChainMode && cliMode && (!wallet.connectedWallet || selectedRoleRequiresCli);
+          const ccSpoWalletBlocked = Boolean(isOnChainMode && wallet.connectedWallet && selectedRoleRequiresCli);
           const eligibilityBlocked = isOnChainMode && hasEligibilityRestrictions &&
             (hasWalletVotingPath ? !eligibility.eligible : cliPath ? !cliEligible : true);
           const eligibilityChecking = isOnChainMode && hasEligibilityRestrictions &&
@@ -1286,8 +1290,8 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
                   ? t('vote.checkingEligibility')
                   : isExpired
                     ? t('vote.surveyExpired')
-                  : eligibilityBlocked
-                    ? t('vote.notEligibleToVote')
+                    : eligibilityBlocked
+                      ? t('vote.notEligibleToVote')
                     : ccSpoWalletBlocked
                       ? 'CLI only for CC/SPO'
                     : drepProofBlocked
@@ -1304,12 +1308,12 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
             {validation.errors[0]}
           </p>
         )}
-        {isOnChainMode && forceCliOnlySurvey && (
+        {isOnChainMode && surveyRequiresCliOnly && (
           <p className="text-xs text-amber-300 text-center">
             CC/SPO surveys are CLI-only. Connected wallets are ignored for submission.
           </p>
         )}
-        {isOnChainMode && cliMode && (!wallet.connectedWallet || forceCliOnlySurvey) && (
+        {isOnChainMode && cliMode && (!wallet.connectedWallet || selectedRoleRequiresCli) && (
           <div className="text-xs text-slate-500 bg-slate-800/20 border border-slate-700/30 rounded-lg p-3">
             <div className="mb-3 rounded-lg border border-slate-700/40 bg-slate-900/30 p-3 cli-quick-guide">
               <p className="text-slate-300 font-semibold mb-2">{t('vote.quickCliGuide')}</p>
