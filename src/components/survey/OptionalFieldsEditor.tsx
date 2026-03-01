@@ -181,80 +181,37 @@ export function OptionalFieldsEditor({
               <label className="text-sm font-medium text-slate-300">
                 Lifecycle Window
               </label>
-              {lifecycle ? (
-                <button
-                  type="button"
-                  onClick={() => onLifecycleChange(undefined)}
-                  className="text-xs text-red-400 hover:text-red-300"
-                >
-                  {t('common.remove')}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() =>
+            </div>
+            <div className="pl-4 border-l-2 border-slate-700">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">
+                  {t('create.endEpoch')} (required)
+                </label>
+                <input
+                  type="number"
+                  min={typeof currentEpoch === 'number' ? currentEpoch + 1 : 1}
+                  max={typeof currentEpoch === 'number' ? currentEpoch + 10 : 10}
+                  value={lifecycle?.endEpoch ?? ''}
+                  onChange={(e) =>
                     onLifecycleChange({
-                      endEpoch: typeof currentEpoch === 'number' ? currentEpoch + 6 : 6,
+                      ...(lifecycle ?? {}),
+                      endEpoch: parseInt(e.target.value) || 0,
                     })
                   }
-                  className="text-xs text-teal-400 hover:text-teal-300"
-                >
-                  {t('common.add')}
-                </button>
-              )}
-            </div>
-            {lifecycle && (
-              <div className="pl-4 border-l-2 border-slate-700">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">
-                    Start epoch (optional)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={lifecycle.startEpoch ?? ''}
-                    onChange={(e) =>
-                      onLifecycleChange({
-                        ...lifecycle,
-                        startEpoch:
-                          e.target.value.trim() === ''
-                            ? undefined
-                            : parseInt(e.target.value) || 0,
-                      })
-                    }
-                    placeholder={typeof currentEpoch === 'number' ? String(currentEpoch) : t('create.endEpochPlaceholder')}
-                    className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
-                  />
-                </div>
-                <div className="mt-3">
-                  <label className="block text-xs text-slate-400 mb-1">
-                    {t('create.endEpoch')} (required)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={lifecycle.endEpoch ?? ''}
-                    onChange={(e) =>
-                      onLifecycleChange({
-                        ...lifecycle,
-                        endEpoch: parseInt(e.target.value) || 0,
-                      })
-                    }
-                    placeholder={
-                      typeof currentEpoch === 'number'
-                        ? String(currentEpoch + 6)
-                        : t('create.endEpochPlaceholder')
-                    }
-                    className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
-                  />
-                  <p className="text-xs text-slate-500 mt-1">
-                    {typeof currentEpoch === 'number'
-                      ? `Default is current epoch + 6 (${currentEpoch + 6}).`
-                      : 'Default is current epoch + 6.'}
-                  </p>
-                </div>
+                  placeholder={
+                    typeof currentEpoch === 'number'
+                      ? String(currentEpoch + 6)
+                      : t('create.endEpochPlaceholder')
+                  }
+                  className="w-44 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  {typeof currentEpoch === 'number'
+                    ? `Allowed range: ${currentEpoch + 1} to ${currentEpoch + 10}. Default is ${currentEpoch + 6}.`
+                    : 'Allowed range: current epoch +1 to +10. Default is +6.'}
+                </p>
               </div>
-            )}
+            </div>
           </div>
         </div>
       )}

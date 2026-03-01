@@ -71,7 +71,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
   const [eligibility, setEligibility] = useState<EligibilityRole[] | undefined>(['Stakeholder']);
   const [voteWeighting, setVoteWeighting] = useState<VoteWeighting | undefined>('StakeBased');
   const [referenceAction, setReferenceAction] = useState<ReferenceAction | undefined>();
-  const [lifecycle, setLifecycle] = useState<Lifecycle | undefined>();
+  const [lifecycle, setLifecycle] = useState<Lifecycle>({ endEpoch: 6 });
   const [currentEpoch, setCurrentEpoch] = useState<number | null>(null);
   const [lifecycleTouched, setLifecycleTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -86,7 +86,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
         if (cancelled) return;
         const epoch = typeof latestEpoch.epoch === 'number' ? latestEpoch.epoch : null;
         setCurrentEpoch(epoch);
-        if (epoch !== null && !lifecycleTouched && !lifecycle) {
+        if (epoch !== null && !lifecycleTouched) {
           setLifecycle({ endEpoch: epoch + 6 });
         }
       } catch {
@@ -96,7 +96,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
       }
     })();
     return () => { cancelled = true; };
-  }, [isOnChainMode, blockfrostClient, lifecycleTouched, lifecycle]);
+  }, [isOnChainMode, blockfrostClient, lifecycleTouched]);
   const buildQuestionFromDraft = useCallback((draft: QuestionDraft, index: number): SurveyQuestion => {
     const isCustom = ![
       METHOD_SINGLE_CHOICE,
@@ -141,7 +141,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
     if (eligibility && eligibility.length > 0) details.eligibility = eligibility;
     if (voteWeighting) details.voteWeighting = voteWeighting;
     if (referenceAction) details.referenceAction = referenceAction;
-    if (lifecycle) details.lifecycle = lifecycle;
+    details.lifecycle = lifecycle;
     return details;
   }, [title, description, nonEmptyQuestions, buildQuestionFromDraft, eligibility, voteWeighting, referenceAction, lifecycle]);
 
@@ -150,6 +150,16 @@ export function SurveyCreationForm({ onCreated }: Props) {
     if (!title.trim()) errors.push('title is required');
     if (!description.trim()) errors.push('description is required');
     if (nonEmptyQuestions.length === 0) errors.push('at least one question is required');
+    const endEpoch = lifecycle.endEpoch;
+    if (!Number.isInteger(endEpoch ?? NaN)) {
+      errors.push('lifecycle.endEpoch is required');
+    } else if (typeof currentEpoch === 'number') {
+      const minEpoch = currentEpoch + 1;
+      const maxEpoch = currentEpoch + 10;
+      if ((endEpoch ?? 0) < minEpoch || (endEpoch ?? 0) > maxEpoch) {
+        errors.push(`lifecycle.endEpoch must be between ${minEpoch} and ${maxEpoch}`);
+      }
+    }
 
     questions.forEach((draft, index) => {
       const details: SurveyDetails = {
@@ -164,7 +174,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
       }
     });
     return { valid: errors.length === 0, errors };
-  }, [title, description, questions, nonEmptyQuestions.length, buildQuestionFromDraft]);
+  }, [title, description, questions, nonEmptyQuestions.length, buildQuestionFromDraft, lifecycle.endEpoch, currentEpoch]);
 
   const isFormFilled = title.trim() && description.trim() && nonEmptyQuestions.length > 0;
   const createMsg = title ? [title] : undefined;
