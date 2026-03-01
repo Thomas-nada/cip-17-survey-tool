@@ -36,7 +36,7 @@ const METHOD_ICONS = {
 export function SurveyDetailPage() {
   const { surveyTxId } = useParams<{ surveyTxId: string }>();
   const navigate = useNavigate();
-  const { state, blockchain, dispatch, mode } = useApp();
+  const { state, blockchain, dispatch, mode, currentEpoch } = useApp();
   const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<Tab>('respond');
   const [copied, setCopied] = useState(false);
@@ -116,6 +116,9 @@ export function SurveyDetailPage() {
 
   const responseCount =
     state.responses.get(survey.surveyTxId)?.length ?? 0;
+  const endEpoch = survey.details.lifecycle?.endEpoch;
+  const hasEpochLifecycle = typeof endEpoch === 'number';
+  const isExpired = hasEpochLifecycle && typeof currentEpoch === 'number' && currentEpoch > endEpoch;
 
   const questions = survey.details.questions && survey.details.questions.length > 0
     ? survey.details.questions
@@ -182,6 +185,15 @@ export function SurveyDetailPage() {
               <Users className="w-3 h-3" />
               {responseCount} {t('detail.responses')}
             </span>
+            {hasEpochLifecycle && (
+              <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+                isExpired
+                  ? 'bg-red-500/10 border-red-500/20 text-red-300'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+              }`}>
+                {isExpired ? t('survey.statusExpired') : t('survey.statusActive')}
+              </span>
+            )}
           </div>
 
           <h2 className="text-2xl font-bold text-white mb-2 font-heading">

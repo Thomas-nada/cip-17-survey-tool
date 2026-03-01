@@ -48,7 +48,7 @@ interface QuestionDraft {
 }
 
 export function SurveyCreationForm({ onCreated }: Props) {
-  const { blockchain, dispatch, mode, wallet } = useApp();
+  const { blockchain, blockfrostClient, dispatch, mode, wallet } = useApp();
   const { t } = useI18n();
   const [cliMode, setCliMode] = useState(false);
   const isOnChainMode = mode === 'mainnet' || mode === 'testnet';
@@ -72,8 +72,31 @@ export function SurveyCreationForm({ onCreated }: Props) {
   const [voteWeighting, setVoteWeighting] = useState<VoteWeighting | undefined>();
   const [referenceAction, setReferenceAction] = useState<ReferenceAction | undefined>();
   const [lifecycle, setLifecycle] = useState<Lifecycle | undefined>();
+  const [currentEpoch, setCurrentEpoch] = useState<number | null>(null);
+  const [lifecycleTouched, setLifecycleTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [prefs, setPrefs] = useState(() => getUserPreferences());
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isOnChainMode || !blockfrostClient) return;
+    (async () => {
+      try {
+        const latestEpoch = await blockfrostClient.getLatestEpoch();
+        if (cancelled) return;
+        const epoch = typeof latestEpoch.epoch === 'number' ? latestEpoch.epoch : null;
+        setCurrentEpoch(epoch);
+        if (epoch !== null && !lifecycleTouched && !lifecycle) {
+          setLifecycle({ endEpoch: epoch + 6 });
+        }
+      } catch {
+        if (!cancelled) {
+          setCurrentEpoch(null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOnChainMode, blockfrostClient, lifecycleTouched, lifecycle]);
   const buildQuestionFromDraft = useCallback((draft: QuestionDraft, index: number): SurveyQuestion => {
     const isCustom = ![
       METHOD_SINGLE_CHOICE,
@@ -457,7 +480,11 @@ export function SurveyCreationForm({ onCreated }: Props) {
             referenceAction={referenceAction}
             onReferenceActionChange={setReferenceAction}
             lifecycle={lifecycle}
-            onLifecycleChange={setLifecycle}
+            onLifecycleChange={(next) => {
+              setLifecycle(next);
+              setLifecycleTouched(true);
+            }}
+            currentEpoch={currentEpoch}
           />
 
           {/* Validation errors */}

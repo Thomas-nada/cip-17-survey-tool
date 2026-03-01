@@ -66,6 +66,7 @@ interface AppContextValue {
     testnetKey: boolean;
     checkedAt: number | null;
   };
+  currentEpoch: number | null;
   state: SurveyState;
   dispatch: React.Dispatch<SurveyAction>;
   // Wallet state
@@ -252,6 +253,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     testnetKey: false,
     checkedAt: null as number | null,
   });
+  const [currentEpoch, setCurrentEpoch] = React.useState<number | null>(null);
   const [state, dispatch] = useReducer(surveyReducer, mode, loadCachedState);
 
   // CIP-30 wallet hook
@@ -329,17 +331,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const run = async () => {
       try {
-        const health = await blockfrostClientRef.current?.getServiceHealth();
-        if (cancelled || !health) return;
-        setBackendHealth({
-          ok: Boolean(health.ok),
-          mainnetKey: Boolean(health.keys?.mainnet),
-          testnetKey: Boolean(health.keys?.testnet),
-          checkedAt: typeof health.ts === 'number' ? health.ts : Date.now(),
-        });
+        const client = blockfrostClientRef.current;
+        if (!client) return;
+        const [health, epochInfo] = await Promise.all([
+          client.getServiceHealth(),
+          client.getLatestEpoch().catch(() => null),
+        ]);
+        if (cancelled) return;
+        if (health) {
+          setBackendHealth({
+            ok: Boolean(health.ok),
+            mainnetKey: Boolean(health.keys?.mainnet),
+            testnetKey: Boolean(health.keys?.testnet),
+            checkedAt: typeof health.ts === 'number' ? health.ts : Date.now(),
+          });
+        }
+        setCurrentEpoch(typeof epochInfo?.epoch === 'number' ? epochInfo.epoch : null);
       } catch {
         if (!cancelled) {
           setBackendHealth((prev) => ({ ...prev, ok: false, checkedAt: Date.now() }));
+          setCurrentEpoch(null);
         }
       }
     };
@@ -423,11 +434,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       blockchain,
       blockfrostClient: blockfrostClientRef.current,
       backendHealth,
+      currentEpoch,
       state,
       dispatch,
       wallet: walletState,
     }),
-    [mode, setMode, blockchain, backendHealth, state, walletState]
+    [mode, setMode, blockchain, backendHealth, currentEpoch, state, walletState]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

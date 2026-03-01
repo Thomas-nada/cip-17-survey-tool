@@ -18,6 +18,7 @@ interface Props {
   onReferenceActionChange: (ra: ReferenceAction | undefined) => void;
   lifecycle?: Lifecycle;
   onLifecycleChange: (lc: Lifecycle | undefined) => void;
+  currentEpoch?: number | null;
 }
 
 export function OptionalFieldsEditor({
@@ -29,6 +30,7 @@ export function OptionalFieldsEditor({
   onReferenceActionChange,
   lifecycle,
   onLifecycleChange,
+  currentEpoch,
 }: Props) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
@@ -191,7 +193,9 @@ export function OptionalFieldsEditor({
                 <button
                   type="button"
                   onClick={() =>
-                    onLifecycleChange({ endSlot: 0 })
+                    onLifecycleChange({
+                      endEpoch: typeof currentEpoch === 'number' ? currentEpoch + 6 : 6,
+                    })
                   }
                   className="text-xs text-teal-400 hover:text-teal-300"
                 >
@@ -203,44 +207,50 @@ export function OptionalFieldsEditor({
               <div className="pl-4 border-l-2 border-slate-700">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">
-                    Start slot (optional)
+                    Start epoch (optional)
                   </label>
                   <input
                     type="number"
                     min={0}
-                    value={lifecycle.startSlot ?? ''}
+                    value={lifecycle.startEpoch ?? ''}
                     onChange={(e) =>
                       onLifecycleChange({
                         ...lifecycle,
-                        startSlot:
+                        startEpoch:
                           e.target.value.trim() === ''
                             ? undefined
                             : parseInt(e.target.value) || 0,
                       })
                     }
-                    placeholder="e.g. 120000000"
+                    placeholder={typeof currentEpoch === 'number' ? String(currentEpoch) : t('create.endEpochPlaceholder')}
                     className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
                   />
                 </div>
                 <div className="mt-3">
                   <label className="block text-xs text-slate-400 mb-1">
-                    End slot (required)
+                    {t('create.endEpoch')} (required)
                   </label>
                   <input
                     type="number"
                     min={0}
-                    value={lifecycle.endSlot}
+                    value={lifecycle.endEpoch ?? ''}
                     onChange={(e) =>
                       onLifecycleChange({
                         ...lifecycle,
-                        endSlot: parseInt(e.target.value) || 0,
+                        endEpoch: parseInt(e.target.value) || 0,
                       })
                     }
-                    placeholder="e.g. 120432000"
+                    placeholder={
+                      typeof currentEpoch === 'number'
+                        ? String(currentEpoch + 6)
+                        : t('create.endEpochPlaceholder')
+                    }
                     className="w-40 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-code"
                   />
                   <p className="text-xs text-slate-500 mt-1">
-                    If start slot is omitted, survey is live immediately.
+                    {typeof currentEpoch === 'number'
+                      ? `Default is current epoch + 6 (${currentEpoch + 6}).`
+                      : 'Default is current epoch + 6.'}
                   </p>
                 </div>
               </div>

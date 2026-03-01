@@ -14,6 +14,7 @@ import {
 } from '../../types/survey.ts';
 import type { StoredSurvey } from '../../types/survey.ts';
 import { useI18n } from '../../context/I18nContext.tsx';
+import { useApp } from '../../context/AppContext.tsx';
 
 const METHOD_CONFIG = {
   [METHOD_SINGLE_CHOICE]: {
@@ -46,8 +47,12 @@ interface Props {
 }
 
 export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
+  const { currentEpoch } = useApp();
   const { t } = useI18n();
   const { details } = survey;
+  const endEpoch = details.lifecycle?.endEpoch;
+  const hasEpochLifecycle = typeof endEpoch === 'number';
+  const isExpired = hasEpochLifecycle && typeof currentEpoch === 'number' && currentEpoch > endEpoch;
   const questions = details.questions && details.questions.length > 0
     ? details.questions
     : (details.question && details.methodType
@@ -100,6 +105,15 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
                 ))}
               </div>
             )}
+            {hasEpochLifecycle && (
+              <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+                isExpired
+                  ? 'bg-red-500/10 border-red-500/20 text-red-300'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+              }`}>
+                {isExpired ? t('survey.statusExpired') : t('survey.statusActive')}
+              </span>
+            )}
           </div>
 
           {/* Title & question */}
@@ -120,10 +134,10 @@ export function SurveyCard({ survey, responseCount = 0, onClick }: Props) {
               <Users className="w-3 h-3" />
               <span className="font-semibold text-slate-400">{responseCount}</span> {t('detail.responses')}
             </span>
-            {details.lifecycle?.endSlot != null && (
+            {details.lifecycle?.endEpoch != null && (
               <span className="hidden sm:flex items-center gap-1.5">
                 <Clock className="w-3 h-3" />
-                Ends slot {details.lifecycle.endSlot.toLocaleString()}
+                {t('surveyCard.endsEpoch', { epoch: details.lifecycle.endEpoch.toLocaleString() })}
               </span>
             )}
           </div>

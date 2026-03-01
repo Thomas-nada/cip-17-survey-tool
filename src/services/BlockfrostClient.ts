@@ -15,6 +15,10 @@ export interface BlockfrostBlockInfo {
   time: number;
 }
 
+export interface BlockfrostEpochInfo {
+  epoch: number;
+}
+
 export interface BlockfrostTxInfo {
   hash: string;
   block_height: number;
@@ -330,6 +334,11 @@ export class BlockfrostClient {
   /** Get latest block info */
   async getLatestBlock(): Promise<BlockfrostBlockInfo> {
     return this.fetch<BlockfrostBlockInfo>('/blocks/latest');
+  }
+
+  /** Get latest epoch info */
+  async getLatestEpoch(): Promise<BlockfrostEpochInfo> {
+    return this.fetch<BlockfrostEpochInfo>('/epochs/latest');
   }
 
   /** Submit a signed transaction (CBOR hex) */

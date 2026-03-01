@@ -59,10 +59,15 @@ function bytesToHex(bytes: Uint8Array): string {
 }
 
 export function SurveyResponseForm({ survey, onSubmitted }: Props) {
-  const { blockchain, dispatch, mode, wallet, blockfrostClient } = useApp();
+  const { blockchain, dispatch, mode, wallet, blockfrostClient, currentEpoch } = useApp();
   const { t } = useI18n();
   const { details } = survey;
   const isOnChainMode = mode === 'mainnet' || mode === 'testnet';
+  const endEpoch = details.lifecycle?.endEpoch;
+  const isExpired =
+    typeof endEpoch === 'number' &&
+    typeof currentEpoch === 'number' &&
+    currentEpoch > endEpoch;
 
   // Eligibility check
   const eligibility = useEligibility(details.eligibility);
@@ -593,6 +598,11 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isExpired) {
+      toast.error(t('vote.surveyExpired'));
+      return;
+    }
+
     if (!validation.valid) {
       toast.error(t('vote.fixValidationErrors'));
       return;
@@ -664,7 +674,14 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 animate-fadeIn">
+      {isExpired && (
+        <div className="flex items-center gap-2 text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{t('vote.surveyExpired')}</span>
+        </div>
+      )}
       {/* Questions */}
+      <fieldset disabled={isExpired} className={isExpired ? 'opacity-60' : ''}>
       {questions.map((question, questionIndex) => {
         const method = question.methodType;
         const isOptionBased =
@@ -825,6 +842,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
           </div>
         );
       })}
+      </fieldset>
 
       {/* Response payload preview (collapsible) */}
       <div className="bg-slate-800/20 border border-slate-700/30 rounded-xl overflow-hidden">
@@ -1177,9 +1195,10 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
             !cliCredential.trim().startsWith('addr');
           const drepProofRequired = cliPath && Boolean(cliProofRole);
           const drepProofBlocked = drepProofRequired && !cliProofValidated;
-          const isDisabled = !validation.valid || submitting || walletBlocked || eligibilityBlocked || eligibilityChecking;
+          const isDisabled = isExpired || !validation.valid || submitting || walletBlocked || eligibilityBlocked || eligibilityChecking;
           const isWalletSubmitDisabled = isDisabled || ccSpoWalletBlocked;
           const cliDisabled =
+            isExpired ||
             !validation.valid ||
             submitting ||
             missingCliCredential ||
@@ -1206,6 +1225,8 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
                 ? t('common.submitting')
                 : eligibilityChecking
                   ? t('vote.checkingEligibility')
+                  : isExpired
+                    ? t('vote.surveyExpired')
                   : eligibilityBlocked
                     ? t('vote.notEligibleToVote')
                     : ccSpoWalletBlocked

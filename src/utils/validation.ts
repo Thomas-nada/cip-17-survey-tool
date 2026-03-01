@@ -159,20 +159,50 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
   }
 
   if (details.lifecycle) {
-    if (
-      details.lifecycle.startSlot !== undefined &&
-      (details.lifecycle.startSlot < 0 || !Number.isInteger(details.lifecycle.startSlot))
-    ) {
-      errors.push('lifecycle.startSlot must be a non-negative integer');
-    }
-    if (details.lifecycle.endSlot < 0 || !Number.isInteger(details.lifecycle.endSlot)) {
-      errors.push('lifecycle.endSlot must be a non-negative integer');
-    }
-    if (
-      details.lifecycle.startSlot !== undefined &&
-      details.lifecycle.endSlot < details.lifecycle.startSlot
-    ) {
-      errors.push('lifecycle.endSlot must be >= lifecycle.startSlot');
+    const hasEpochLifecycle = details.lifecycle.endEpoch !== undefined || details.lifecycle.startEpoch !== undefined;
+    if (hasEpochLifecycle) {
+      if (
+        details.lifecycle.startEpoch !== undefined &&
+        (details.lifecycle.startEpoch < 0 || !Number.isInteger(details.lifecycle.startEpoch))
+      ) {
+        errors.push('lifecycle.startEpoch must be a non-negative integer');
+      }
+      if (
+        details.lifecycle.endEpoch === undefined ||
+        details.lifecycle.endEpoch < 0 ||
+        !Number.isInteger(details.lifecycle.endEpoch)
+      ) {
+        errors.push('lifecycle.endEpoch must be a non-negative integer');
+      }
+      if (
+        details.lifecycle.startEpoch !== undefined &&
+        details.lifecycle.endEpoch !== undefined &&
+        details.lifecycle.endEpoch < details.lifecycle.startEpoch
+      ) {
+        errors.push('lifecycle.endEpoch must be >= lifecycle.startEpoch');
+      }
+    } else {
+      // Legacy slot-based validation for older payloads
+      if (
+        details.lifecycle.startSlot !== undefined &&
+        (details.lifecycle.startSlot < 0 || !Number.isInteger(details.lifecycle.startSlot))
+      ) {
+        errors.push('lifecycle.startSlot must be a non-negative integer');
+      }
+      if (
+        details.lifecycle.endSlot === undefined ||
+        details.lifecycle.endSlot < 0 ||
+        !Number.isInteger(details.lifecycle.endSlot)
+      ) {
+        errors.push('lifecycle.endSlot must be a non-negative integer');
+      }
+      if (
+        details.lifecycle.startSlot !== undefined &&
+        details.lifecycle.endSlot !== undefined &&
+        details.lifecycle.endSlot < details.lifecycle.startSlot
+      ) {
+        errors.push('lifecycle.endSlot must be >= lifecycle.startSlot');
+      }
     }
   }
 

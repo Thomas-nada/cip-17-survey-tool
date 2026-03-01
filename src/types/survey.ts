@@ -27,8 +27,12 @@ export interface ReferenceAction {
 }
 
 export interface Lifecycle {
+  // Preferred epoch-based lifecycle
+  startEpoch?: number;
+  endEpoch?: number;
+  // Legacy slot-based lifecycle (read compatibility)
   startSlot?: number;
-  endSlot: number;
+  endSlot?: number;
 }
 
 export interface SurveyQuestion {
