@@ -198,15 +198,45 @@ function downloadTextFile(content: string, filename: string, type = 'text/plain'
   URL.revokeObjectURL(url);
 }
 
+function mapToSerializablePowers(map: Map<string, bigint>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of map.entries()) {
+    out[key] = value.toString();
+  }
+  return out;
+}
+
+function parseSerializablePowers(input: Record<string, string>): Map<string, bigint> {
+  const map = new Map<string, bigint>();
+  for (const [key, value] of Object.entries(input)) {
+    try {
+      map.set(key, BigInt(value));
+    } catch {
+      // Ignore malformed entries.
+    }
+  }
+  return map;
+}
+
 interface Props {
   survey: StoredSurvey;
 }
 
 type OptionSortMode = 'leading' | 'name' | 'votes' | 'percentage';
 type RoleFilterValue = 'all' | EligibilityRole;
+const STAKE_SNAPSHOT_VERSION = 1;
+
+type StakeSnapshotPayload = {
+  version: number;
+  surveyTxId: string;
+  endEpoch: number;
+  capturedAtEpoch: number | null;
+  capturedAt: number;
+  powers: Record<string, string>;
+};
 
 export function TallyDashboard({ survey }: Props) {
-  const { state, blockfrostClient, mode } = useApp();
+  const { state, blockfrostClient, mode, currentEpoch } = useApp();
   const { t } = useI18n();
   const isOnChainMode = mode === 'mainnet' || mode === 'testnet';
   const responses = state.responses.get(survey.surveyTxId) ?? [];
@@ -219,6 +249,15 @@ export function TallyDashboard({ survey }: Props) {
     [configuredRoleWeighting]
   );
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<RoleFilterValue>('all');
+  const isCompositeView = requiredRoles.length > 1 && selectedRoleFilter === 'all';
+  const surveyEndEpoch = survey.details.endEpoch;
+  const surveyClosed = typeof surveyEndEpoch === 'number' &&
+    typeof currentEpoch === 'number' &&
+    currentEpoch > surveyEndEpoch;
+  const snapshotStorageKey = useMemo(
+    () => `cip17_stake_snapshot:${mode}:${survey.surveyTxId}:${surveyEndEpoch}`,
+    [mode, survey.surveyTxId, surveyEndEpoch]
+  );
   const activeRoles = useMemo(
     () => (selectedRoleFilter === 'all' ? requiredRoles : [selectedRoleFilter]),
     [selectedRoleFilter, requiredRoles]
@@ -240,6 +279,8 @@ export function TallyDashboard({ survey }: Props) {
 
   // Stake map: responseCredential → lovelace (for StakeBased weighting)
   const [stakeMap, setStakeMap] = useState<Map<string, bigint>>(new Map());
+  const [snapshotStakeMap, setSnapshotStakeMap] = useState<Map<string, bigint> | null>(null);
+  const [snapshotCapturedEpoch, setSnapshotCapturedEpoch] = useState<number | null>(null);
   const [stakesLoading, setStakesLoading] = useState(false);
   const [displayVotingPower, setDisplayVotingPower] = useState<Map<string, bigint>>(new Map());
   const [oneVoteCredentials, setOneVoteCredentials] = useState<Set<string>>(new Set());
@@ -327,8 +368,150 @@ export function TallyDashboard({ survey }: Props) {
     };
   }, []);
 
+  // Restore a previously captured end-epoch stake snapshot, if present.
+  useEffect(() => {
+    setSnapshotStakeMap(null);
+    setSnapshotCapturedEpoch(null);
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      const raw = window.localStorage.getItem(snapshotStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as StakeSnapshotPayload;
+      if (!parsed || parsed.version !== STAKE_SNAPSHOT_VERSION) return;
+      if (parsed.surveyTxId !== survey.surveyTxId) return;
+      if (parsed.endEpoch !== surveyEndEpoch) return;
+      if (!parsed.powers || typeof parsed.powers !== 'object') return;
+      setSnapshotStakeMap(parseSerializablePowers(parsed.powers));
+      setSnapshotCapturedEpoch(typeof parsed.capturedAtEpoch === 'number' ? parsed.capturedAtEpoch : null);
+    } catch {
+      // Ignore malformed snapshot cache.
+    }
+  }, [snapshotStorageKey, survey.surveyTxId, surveyEndEpoch]);
+
+  // Freeze stake-based voting power once the survey is closed.
+  useEffect(() => {
+    if (!surveyClosed || !isStakeBased || !isOnChainMode || !blockfrostClient) return;
+    if (responses.length === 0) return;
+    if (snapshotStakeMap) return;
+
+    let cancelled = false;
+    setStakesLoading(true);
+
+    (async () => {
+      const next = new Map<string, bigint>();
+      const drepPower = new Map<string, bigint>();
+      const poolPower = new Map<string, bigint>();
+      const spoPower = new Map<string, bigint>();
+      const stakeholderPower = new Map<string, bigint>();
+
+      for (const resp of responses) {
+        if (cancelled) return;
+        const cred = resp.responseCredential;
+        const role = resp.responderRole;
+        let power = 0n;
+        try {
+          if (role === 'DRep') {
+            if (drepPower.has(cred)) {
+              power = drepPower.get(cred) ?? 0n;
+            } else {
+              const info = await blockfrostClient.getDRepInfo(cred);
+              power = info && !info.retired && info.amount ? BigInt(info.amount) : 0n;
+              drepPower.set(cred, power);
+            }
+          } else if (role === 'SPO') {
+            if (cred.startsWith('pool')) {
+              if (poolPower.has(cred)) {
+                power = poolPower.get(cred) ?? 0n;
+              } else {
+                const p = await blockfrostClient.getPoolVotingPower(cred);
+                power = p ?? 0n;
+                poolPower.set(cred, power);
+              }
+            } else {
+              const stakeAddress = await resolveStakeAddressForLookup(
+                blockfrostClient,
+                resp.voterAddress,
+                cred
+              );
+              const cacheKey = stakeAddress ?? cred;
+              if (spoPower.has(cacheKey)) {
+                power = spoPower.get(cacheKey) ?? 0n;
+              } else if (stakeAddress) {
+                const p = await blockfrostClient.getSPOVotingPower(stakeAddress);
+                power = p ?? 0n;
+                spoPower.set(cacheKey, power);
+              }
+            }
+          } else if (role === 'Stakeholder') {
+            const stakeAddress = await resolveStakeAddressForLookup(
+              blockfrostClient,
+              resp.voterAddress,
+              cred
+            );
+            const cacheKey = stakeAddress ?? cred;
+            if (stakeholderPower.has(cacheKey)) {
+              power = stakeholderPower.get(cacheKey) ?? 0n;
+            } else if (stakeAddress) {
+              const accountInfo = await blockfrostClient.getAccountInfo(stakeAddress);
+              power = accountInfo ? BigInt(accountInfo.controlled_amount) : 0n;
+              stakeholderPower.set(cacheKey, power);
+            }
+          }
+        } catch {
+          power = 0n;
+        }
+
+        // Keep lookup compatibility for tallying and response table rendering.
+        next.set(resp.txId, power);
+        next.set(cred, power);
+        if (resp.voterAddress) next.set(resp.voterAddress, power);
+      }
+
+      if (cancelled) return;
+      setSnapshotStakeMap(next);
+      setSnapshotCapturedEpoch(currentEpoch ?? null);
+      setStakeMap(next);
+      setStakesLoading(false);
+
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          const payload: StakeSnapshotPayload = {
+            version: STAKE_SNAPSHOT_VERSION,
+            surveyTxId: survey.surveyTxId,
+            endEpoch: surveyEndEpoch,
+            capturedAtEpoch: currentEpoch ?? null,
+            capturedAt: Date.now(),
+            powers: mapToSerializablePowers(next),
+          };
+          window.localStorage.setItem(snapshotStorageKey, JSON.stringify(payload));
+        } catch {
+          // Best-effort persistence only.
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [
+    surveyClosed,
+    isStakeBased,
+    isOnChainMode,
+    blockfrostClient,
+    responses,
+    snapshotStakeMap,
+    survey.surveyTxId,
+    surveyEndEpoch,
+    currentEpoch,
+    snapshotStorageKey,
+  ]);
+
   // Fetch stake amounts for unique voters when StakeBased
   useEffect(() => {
+    if (surveyClosed && snapshotStakeMap) {
+      setStakeMap(snapshotStakeMap);
+      setStakesLoading(false);
+      return;
+    }
+
     if (!isStakeBased || filteredResponses.length === 0 || !isOnChainMode || !blockfrostClient) {
       setStakeMap(new Map());
       return;
@@ -395,7 +578,7 @@ export function TallyDashboard({ survey }: Props) {
     })();
 
     return () => { cancelled = true; };
-  }, [isStakeBased, filteredResponses, isOnChainMode, blockfrostClient]);
+  }, [isStakeBased, filteredResponses, isOnChainMode, blockfrostClient, surveyClosed, snapshotStakeMap]);
 
   // Role-aware display voting power for the response list:
   // DRep/SPO => delegated power, CC => 1 vote, Stakeholder => wallet amount.
@@ -825,6 +1008,7 @@ export function TallyDashboard({ survey }: Props) {
       return {
         txId: resp.txId,
         surveyTxId: resp.surveyTxId,
+        responderRole: resp.responderRole,
         responseCredential: resp.responseCredential,
         voterAddress: resp.voterAddress ?? '',
         value,
@@ -834,7 +1018,11 @@ export function TallyDashboard({ survey }: Props) {
         slot: resp.slot,
         txIndexInBlock: resp.txIndexInBlock,
         utcTime: formatUtcTime(resp.timestampMs),
-        reason: resp.identityVerificationReason ?? '',
+        exclusionReason: unverified
+          ? (resp.identityVerificationReason ?? 'identity verification failed')
+          : superseded
+            ? 'superseded by latest valid response for (responderRole,responseCredential)'
+            : '',
       };
     });
   }, [filteredResponses, latestCountedByVoter, displayVotingPower]);
@@ -864,6 +1052,14 @@ export function TallyDashboard({ survey }: Props) {
       generatedAt: new Date().toISOString(),
       surveyTxId: survey.surveyTxId,
       surveyHash: survey.surveyHash,
+      view: {
+        roleFilter: selectedRoleFilter,
+        canonical: !isCompositeView,
+        mergePolicy: isCompositeView ? 'sum-per-role-tallies' : 'none',
+        weightingInterpretation: isCompositeView
+          ? 'non-canonical composite; mixed role weighting units may not be directly comparable'
+          : 'canonical per-role tally',
+      },
       tally,
       snapshotHash: tallySnapshotHash,
       responses: responseAuditRows,
@@ -877,12 +1073,12 @@ export function TallyDashboard({ survey }: Props) {
 
   const exportAuditCsv = () => {
     const header = [
-      'tx_id', 'survey_tx_id', 'response_credential', 'voter_address', 'value',
-      'voting_power_lovelace', 'counted', 'status', 'slot', 'tx_index', 'utc_time', 'reason',
+      'tx_id', 'survey_tx_id', 'responder_role', 'response_credential', 'voter_address', 'value',
+      'voting_power_lovelace', 'counted', 'status', 'slot', 'tx_index', 'utc_time', 'exclusion_reason',
     ];
     const rows = responseAuditRows.map((r) => [
-      r.txId, r.surveyTxId, r.responseCredential, r.voterAddress, String(r.value),
-      r.votingPowerLovelace, String(r.counted), r.status, String(r.slot), String(r.txIndexInBlock), r.utcTime, r.reason,
+      r.txId, r.surveyTxId, r.responderRole, r.responseCredential, r.voterAddress, String(r.value),
+      r.votingPowerLovelace, String(r.counted), r.status, String(r.slot), String(r.txIndexInBlock), r.utcTime, r.exclusionReason,
     ]);
     const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const csv = [header, ...rows].map((line) => line.map((c) => esc(c)).join(',')).join('\n');
@@ -1021,6 +1217,15 @@ export function TallyDashboard({ survey }: Props) {
           <p className="text-xs text-sky-400">Loading role-based voting power…</p>
         </div>
       )}
+      {surveyClosed && snapshotStakeMap && (
+        <div className="flex items-center gap-3 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl">
+          <Hash className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+          <p className="text-xs text-emerald-300">
+            Canonical tally locked to end-epoch snapshot
+            {snapshotCapturedEpoch !== null ? ` (captured at epoch ${snapshotCapturedEpoch})` : ''}.
+          </p>
+        </div>
+      )}
       {requiredRoles.length > 1 && (
         <div className="flex items-center justify-between gap-3 p-3 bg-slate-800/25 border border-slate-700/30 rounded-xl">
           <p className="text-xs text-slate-400 font-medium">Role filter</p>
@@ -1029,11 +1234,16 @@ export function TallyDashboard({ survey }: Props) {
             onChange={(e) => setSelectedRoleFilter(e.target.value as RoleFilterValue)}
             className="option-sort-select text-xs rounded-md bg-slate-900/40 border border-slate-700/40 text-slate-300 px-2 py-1"
           >
-            <option value="all">All roles</option>
+            <option value="all">All roles (non-canonical)</option>
             {requiredRoles.map((role) => (
               <option key={role} value={role}>{t(`role.${role}`)}</option>
             ))}
           </select>
+        </div>
+      )}
+      {isCompositeView && (
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-200">
+          Non-canonical view. Use a specific role filter for canonical results.
         </div>
       )}
 
@@ -1127,6 +1337,9 @@ export function TallyDashboard({ survey }: Props) {
           <li>{t('results.policyLatestVote')}</li>
           <li>{t('results.policyUnverifiedExcluded')}</li>
           <li>{t('results.policyWeighting')}</li>
+          {isCompositeView && (
+            <li>Composite view is non-canonical and sums per-role tallies.</li>
+          )}
         </ul>
         <p className="text-[11px] text-slate-500 font-code break-all">
           {t('results.snapshotHash', { hash: tallySnapshotHash })}

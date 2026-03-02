@@ -88,6 +88,7 @@ export function AboutPage() {
         <ul className="text-sm text-slate-300 space-y-2 leading-relaxed list-disc pl-5">
           <li>Latest valid response per (role, credential) is counted (older valid responses are superseded).</li>
           <li>Weighting is applied per role according to roleWeighting.</li>
+          <li>For multi-role surveys, canonical outputs are per-role; any combined "All roles" view is non-canonical.</li>
           <li>Tallies are computed per question, supporting mixed question types in one survey.</li>
           <li>For multi-select, empty selection is valid and means no options selected.</li>
           <li>Audit exports include per-response status and a snapshot hash to support reproducibility.</li>
@@ -119,6 +120,7 @@ export function AboutPage() {
     "surveyResponse": {
       "specVersion": "...",
       "surveyTxId": "...",
+      "responderRole": "Stakeholder",
       "answers": [
         { "questionId": "q1", "selection": [0] },
         { "questionId": "q2", "customValue": "Markdown **text**" }

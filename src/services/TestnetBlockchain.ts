@@ -506,19 +506,15 @@ export class TestnetBlockchain implements BlockchainService {
       return { valid: true, role: 'CC', credential };
     }
 
-    // Stakeholder residual rule
+    // Stakeholder claim: valid when claimed role is eligible and a unique stake credential
+    // is derivable for the signer. Presence of governance-role candidates does not
+    // invalidate the Stakeholder claim.
     if (claimedRole === 'Stakeholder') {
       if (!requiredRoles.includes('Stakeholder')) {
         return { valid: false, reason: 'Claimed Stakeholder role is not eligible for this survey' };
       }
-      const hasGovernanceCandidate = Boolean(
-        governanceCandidates.DRep || governanceCandidates.SPO || governanceCandidates.CC
-      );
-      if (hasGovernanceCandidate) {
-        return { valid: false, reason: 'Stakeholder claim invalid when governance-role evidence is derivable' };
-      }
       if (!signerStakeAddress) {
-        return { valid: false, reason: 'No unique stake credential derivable for Stakeholder residual rule' };
+        return { valid: false, reason: 'No unique stake credential derivable for Stakeholder claim' };
       }
       return { valid: true, role: 'Stakeholder', credential: signerStakeAddress };
     }

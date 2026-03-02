@@ -179,8 +179,8 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
       if (!q.methodSchemaUri?.trim()) {
         errors.push(`${prefix}: custom methods require methodSchemaUri`);
       }
-      if (q.hashAlgorithm !== 'blake2b-256') {
-        errors.push(`${prefix}: custom methods require hashAlgorithm "blake2b-256"`);
+      if (q.hashAlgorithm !== undefined && q.hashAlgorithm !== 'blake2b-256') {
+        errors.push(`${prefix}: if provided, hashAlgorithm must be "blake2b-256"`);
       }
       if (!q.methodSchemaHash?.trim()) {
         errors.push(`${prefix}: custom methods require methodSchemaHash`);

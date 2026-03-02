@@ -15,6 +15,7 @@ import {
   SPEC_VERSION,
 } from '../../constants/methodTypes.ts';
 import { buildCopyContent, getUserPreferences } from '../../utils/userPreferences.ts';
+import { toCardanoJsonMetadata } from '../../utils/cardanoMetadata.ts';
 import {
   METHOD_SINGLE_CHOICE,
   METHOD_MULTI_SELECT,
@@ -180,12 +181,16 @@ export function SurveyCreationForm({ onCreated }: Props) {
   const isFormFilled = title.trim() && description.trim() && nonEmptyQuestions.length > 0;
   const createMsg = title ? [title] : undefined;
 
-  const cliCreatePayload = useMemo(() => ({
-    17: {
-      ...(createMsg ? { msg: createMsg } : {}),
-      surveyDetails: previewSurveyDetails,
-    },
-  }), [createMsg, previewSurveyDetails]);
+  const cliCreatePayload = useMemo(
+    () =>
+      toCardanoJsonMetadata({
+        17: {
+          ...(createMsg ? { msg: createMsg } : {}),
+          surveyDetails: previewSurveyDetails,
+        },
+      }) as Record<string, unknown>,
+    [createMsg, previewSurveyDetails]
+  );
 
   const cliCreatePayloadJson = useMemo(
     () => JSON.stringify(cliCreatePayload, null, 2),
@@ -568,9 +573,9 @@ export function SurveyCreationForm({ onCreated }: Props) {
               if (!hasStakeholder || !hasGovernance) return null;
               return (
                 <div className="mt-3 rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-200">
-                  CIP note: `Stakeholder` is residual. If a governance-role identity (`DRep`/`SPO`/`CC`) is derivable for a response,
-                  that response is counted in that governance role, not as `Stakeholder`. To collect both viewpoints from one operator,
-                  use separate credentials/wallets and separate response transactions.
+                  CIP note: this survey allows multiple roles. A responder can submit separate
+                  responses for different claimed roles (for example `Stakeholder` and `DRep`)
+                  from the same wallet, as long as each claim validates independently.
                 </div>
               );
             })()}

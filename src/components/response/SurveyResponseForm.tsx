@@ -10,6 +10,7 @@ import { validateSurveyResponse } from '../../utils/validation.ts';
 import { SPEC_VERSION } from '../../constants/methodTypes.ts';
 import { MarkdownContent } from '../shared/MarkdownContent.tsx';
 import { buildCopyContent, getUserPreferences } from '../../utils/userPreferences.ts';
+import { toCardanoJsonMetadata } from '../../utils/cardanoMetadata.ts';
 import {
   METHOD_SINGLE_CHOICE,
   METHOD_MULTI_SELECT,
@@ -182,7 +183,10 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
   const hasWalletVotingPath = Boolean(
     wallet.connectedWallet && (selectedVoteRole === null || roleSupportsWallet(selectedVoteRole))
   );
-
+  const derivedRoleSet = useMemo(
+    () => new Set<EligibilityRole>(hasWalletVotingPath ? eligibility.walletRoles : cliWalletRoles),
+    [hasWalletVotingPath, eligibility.walletRoles, cliWalletRoles]
+  );
   useEffect(() => {
     if (requiredRoles.length === 0) {
       setSelectedVoteRole(null);
@@ -220,14 +224,18 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
     return null;
   }, [cliMode, effectiveCredential, requiredRoles]);
 
-  const cliPayload = useMemo(() => ({
-    17: {
-      msg: [`Response to ${survey.details.title}`],
-      surveyResponse: {
-        ...response,
-      },
-    },
-  }), [response, survey.details.title]);
+  const cliPayload = useMemo(
+    () =>
+      toCardanoJsonMetadata({
+        17: {
+          msg: [`Response to ${survey.details.title}`],
+          surveyResponse: {
+            ...response,
+          },
+        },
+      }) as Record<string, unknown>,
+    [response, survey.details.title]
+  );
 
   const cliPayloadJson = useMemo(
     () => JSON.stringify(cliPayload, null, 2),
@@ -619,14 +627,10 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
       toast.error(t('vote.fixValidationErrors'));
       return;
     }
-
     setSubmitting(true);
     try {
       if (selectedVoteRole) {
-        const roleSet = new Set<EligibilityRole>(
-          hasWalletVotingPath ? eligibility.walletRoles : cliWalletRoles
-        );
-        if (!roleSet.has(selectedVoteRole)) {
+        if (!derivedRoleSet.has(selectedVoteRole)) {
           toast.error(`Selected role ${selectedVoteRole} is not currently derivable for this submission path.`);
           return;
         }
@@ -884,16 +888,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
         {showPayload && (
           <div className="px-4 pb-3 animate-slideDown">
             <pre className="text-xs font-code text-slate-400 overflow-x-auto bg-slate-900/30 rounded-lg p-3">
-              {JSON.stringify(
-                {
-                  17: {
-                    msg: [`Response to ${survey.details.title}`],
-                    surveyResponse: response,
-                  },
-                },
-                null,
-                2
-              )}
+              {JSON.stringify(cliPayload, null, 2)}
             </pre>
           </div>
         )}
@@ -937,10 +932,9 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
 
       {mixedStakeholderGovernanceSurvey && (
         <div className="rounded-lg border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-200">
-          CIP rule: `Stakeholder` is residual when governance roles are also configured.
-          If a governance-role identity (`DRep`/`SPO`/`CC`) is derivable for your response,
-          this vote is counted for that governance role, not as `Stakeholder`.
-          Submitting one transaction that counts as both roles from the same wallet is not supported by the CIP derivation rules.
+          CIP note: when multiple roles are configured, submit one response per intended role.
+          A claimed `responderRole` is validated independently against chain evidence and
+          counted in that claimed role when valid.
         </div>
       )}
 
