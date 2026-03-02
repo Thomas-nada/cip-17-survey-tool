@@ -127,6 +127,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
     const base: SurveyResponse = {
       specVersion: SPEC_VERSION,
       surveyTxId: survey.surveyTxId,
+      responderRole: selectedVoteRole ?? requiredRoles[0] ?? 'Stakeholder',
       answers: [],
     };
     base.answers = questions.map((q) => {
@@ -149,7 +150,7 @@ export function SurveyResponseForm({ survey, onSubmitted }: Props) {
     });
 
     return base;
-  }, [survey, questions, selectedByQuestion, numericByQuestion, customByQuestion]);
+  }, [survey, questions, selectedByQuestion, numericByQuestion, customByQuestion, selectedVoteRole, requiredRoles]);
 
   const validation = useMemo(
     () => validateSurveyResponse(response, details),

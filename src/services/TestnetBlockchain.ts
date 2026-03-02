@@ -428,23 +428,38 @@ export class TestnetBlockchain implements BlockchainService {
 
   private async deriveResponderIdentity(
     voterAddress: string,
-    roleWeighting: RoleWeighting
+    roleWeighting: RoleWeighting,
+    claimedRole: EligibilityRole | undefined
   ): Promise<{ valid: boolean; role?: EligibilityRole; credential?: string; reason?: string }> {
     if (!voterAddress || voterAddress === 'unknown') {
       return { valid: false, reason: 'Unable to resolve signer payment address' };
     }
 
     const requiredRoles = Object.keys(roleWeighting) as EligibilityRole[];
-    const governanceRoles = new Set<EligibilityRole>(['DRep', 'SPO', 'CC']);
-    const candidates: Array<{ role: EligibilityRole; credential: string }> = [];
+    if (!claimedRole) {
+      return { valid: false, reason: 'Missing required responderRole claim' };
+    }
+    if (!requiredRoles.includes(claimedRole)) {
+      return { valid: false, reason: 'Claimed responderRole is not eligible for this survey' };
+    }
+
     const signerStakeAddress = await this.resolveSignerStakeAddress(voterAddress);
+    let accountInfo: Awaited<ReturnType<BlockfrostClient['getAccountInfo']>> | null = null;
+    if (signerStakeAddress) {
+      try {
+        accountInfo = await this.blockfrost.getAccountInfo(signerStakeAddress);
+      } catch {
+        accountInfo = null;
+      }
+    }
+
+    const governanceCandidates: Partial<Record<'DRep' | 'SPO' | 'CC', string>> = {};
 
     if (requiredRoles.includes('DRep') && signerStakeAddress) {
       try {
-        const account = await this.blockfrost.getAccountInfo(signerStakeAddress);
-        const drepId = this.normalizeCredential(account?.drep_id);
+        const drepId = this.normalizeCredential(accountInfo?.drep_id);
         if (drepId && await this.blockfrost.isDRep(drepId)) {
-          candidates.push({ role: 'DRep', credential: drepId });
+          governanceCandidates.DRep = drepId;
         }
       } catch {
         // best effort
@@ -453,10 +468,9 @@ export class TestnetBlockchain implements BlockchainService {
 
     if (requiredRoles.includes('SPO') && signerStakeAddress) {
       try {
-        const account = await this.blockfrost.getAccountInfo(signerStakeAddress);
-        const poolId = this.normalizeCredential(account?.pool_id);
+        const poolId = this.normalizeCredential(accountInfo?.pool_id);
         if (poolId && await this.blockfrost.isActivePool(poolId)) {
-          candidates.push({ role: 'SPO', credential: poolId });
+          governanceCandidates.SPO = poolId;
         }
       } catch {
         // best effort
@@ -467,35 +481,49 @@ export class TestnetBlockchain implements BlockchainService {
       try {
         const isCc = await this.blockfrost.isCCMember(signerStakeAddress);
         if (isCc) {
-          candidates.push({ role: 'CC', credential: signerStakeAddress });
+          governanceCandidates.CC = signerStakeAddress;
         }
       } catch {
         // best effort
       }
     }
 
+    if (claimedRole === 'DRep') {
+      const credential = governanceCandidates.DRep;
+      if (!credential) return { valid: false, reason: 'Claimed DRep role not derivable from chain evidence' };
+      return { valid: true, role: 'DRep', credential };
+    }
+
+    if (claimedRole === 'SPO') {
+      const credential = governanceCandidates.SPO;
+      if (!credential) return { valid: false, reason: 'Claimed SPO role not derivable from chain evidence' };
+      return { valid: true, role: 'SPO', credential };
+    }
+
+    if (claimedRole === 'CC') {
+      const credential = governanceCandidates.CC;
+      if (!credential) return { valid: false, reason: 'Claimed CC role not derivable from chain evidence' };
+      return { valid: true, role: 'CC', credential };
+    }
+
     // Stakeholder residual rule
-    if (requiredRoles.includes('Stakeholder')) {
-      const hasGovernanceCandidate = candidates.some((c) => governanceRoles.has(c.role));
-      if (!hasGovernanceCandidate) {
-        if (signerStakeAddress) {
-          candidates.push({ role: 'Stakeholder', credential: signerStakeAddress });
-        } else {
-          return { valid: false, reason: 'No unique stake credential derivable for Stakeholder residual rule' };
-        }
+    if (claimedRole === 'Stakeholder') {
+      if (!requiredRoles.includes('Stakeholder')) {
+        return { valid: false, reason: 'Claimed Stakeholder role is not eligible for this survey' };
       }
+      const hasGovernanceCandidate = Boolean(
+        governanceCandidates.DRep || governanceCandidates.SPO || governanceCandidates.CC
+      );
+      if (hasGovernanceCandidate) {
+        return { valid: false, reason: 'Stakeholder claim invalid when governance-role evidence is derivable' };
+      }
+      if (!signerStakeAddress) {
+        return { valid: false, reason: 'No unique stake credential derivable for Stakeholder residual rule' };
+      }
+      return { valid: true, role: 'Stakeholder', credential: signerStakeAddress };
     }
 
-    if (candidates.length !== 1) {
-      return {
-        valid: false,
-        reason: candidates.length === 0
-          ? 'No eligible responder identity candidate could be derived'
-          : 'Multiple responder identity candidates derived',
-      };
-    }
-
-    return { valid: true, role: candidates[0].role, credential: candidates[0].credential };
+    return { valid: false, reason: 'Unsupported responderRole claim' };
   }
 
   /**
@@ -840,6 +868,7 @@ export class TestnetBlockchain implements BlockchainService {
     const canonicalResponse: SurveyResponse = {
       specVersion: response.specVersion,
       surveyTxId: response.surveyTxId,
+      responderRole: response.responderRole,
       answers: response.answers,
     };
 
@@ -961,8 +990,12 @@ export class TestnetBlockchain implements BlockchainService {
                 continue;
               }
 
-              // Derive exactly one eligible (responderRole, responseCredential) from chain context.
-              const derived = await this.deriveResponderIdentity(voterAddress, roleWeighting);
+              // Derive exactly one eligible (responderRole, responseCredential) for the claimed role.
+              const derived = await this.deriveResponderIdentity(
+                voterAddress,
+                roleWeighting,
+                resp.responderRole
+              );
               if (!derived.valid || !derived.role || !derived.credential) {
                 continue;
               }

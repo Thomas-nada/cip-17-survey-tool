@@ -218,6 +218,10 @@ export function validateSurveyResponse(
   if (!HEX64_REGEX.test(response.surveyTxId)) {
     errors.push('surveyTxId must be a 64-char hex string');
   }
+  const allowedRoles: EligibilityRole[] = ['DRep', 'SPO', 'CC', 'Stakeholder'];
+  if (!response.responderRole || !allowedRoles.includes(response.responderRole)) {
+    errors.push('responderRole is required and must be one of DRep, SPO, CC, Stakeholder');
+  }
 
   const questions = getQuestions(survey);
   const questionById = new Map(questions.map((q) => [q.questionId, q]));

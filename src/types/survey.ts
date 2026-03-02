@@ -82,6 +82,7 @@ export interface SurveyAnswer {
 export interface SurveyResponse {
   specVersion: string;
   surveyTxId: string;
+  responderRole: EligibilityRole;
   answers: SurveyAnswer[];
   // Legacy read compatibility only
   surveyHash?: string;
