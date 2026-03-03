@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:cardano:poll-method-schema:freetext:v1",
+  "title": "Cardano Survey Free-text Method v1",
+  "description": "Custom free-text answer payload for CIP-00XX surveys.",
+  "type": "string",
+  "contentMediaType": "text/markdown"
+}

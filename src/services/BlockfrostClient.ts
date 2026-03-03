@@ -34,6 +34,10 @@ export interface BlockfrostTxUtxos {
   outputs: { address: string; amount: { unit: string; quantity: string }[]; output_index: number }[];
 }
 
+export interface BlockfrostTxCbor {
+  cbor: string;
+}
+
 export interface BlockfrostAccountInfo {
   stake_address: string;
   active: boolean;
@@ -71,6 +75,8 @@ export class BlockfrostClient {
     drep: new Map<string, { at: number; value: BlockfrostDRepInfo | null }>(),
     spoPower: new Map<string, { at: number; value: bigint | null }>(),
     poolPower: new Map<string, { at: number; value: bigint | null }>(),
+    poolPledge: new Map<string, { at: number; value: bigint | null }>(),
+    spoPledge: new Map<string, { at: number; value: bigint | null }>(),
     isDrep: new Map<string, { at: number; value: boolean }>(),
     isSpo: new Map<string, { at: number; value: boolean }>(),
     isPool: new Map<string, { at: number; value: boolean }>(),
@@ -332,6 +338,11 @@ export class BlockfrostClient {
     return this.fetch<BlockfrostTxUtxos>(`/txs/${txHash}/utxos`);
   }
 
+  /** Get transaction CBOR hex */
+  async getTransactionCbor(txHash: string): Promise<BlockfrostTxCbor | null> {
+    return this.fetchOrNull<BlockfrostTxCbor>(`/txs/${txHash}/cbor`);
+  }
+
   /** Get latest block info */
   async getLatestBlock(): Promise<BlockfrostBlockInfo> {
     return this.fetch<BlockfrostBlockInfo>('/blocks/latest');
@@ -540,6 +551,42 @@ export class BlockfrostClient {
       return this.writeCache(this.cache.poolPower, key, BigInt(lovelace));
     } catch {
       return this.writeCache(this.cache.poolPower, key, null);
+    }
+  }
+
+  /** Get active pool live pledge by pool id. */
+  async getPoolLivePledge(poolId: string): Promise<bigint | null> {
+    const key = poolId.trim().toLowerCase();
+    const cached = this.readCache(this.cache.poolPledge, key);
+    if (cached !== undefined) return cached;
+    try {
+      if (!key.startsWith('pool')) return this.writeCache(this.cache.poolPledge, key, null);
+      const poolInfo = await this.fetchOrNull<{
+        retirement_epoch: number | null;
+        live_pledge?: string;
+      }>(`/pools/${key}`);
+      if (!poolInfo || poolInfo.retirement_epoch !== null || !poolInfo.live_pledge) {
+        return this.writeCache(this.cache.poolPledge, key, null);
+      }
+      return this.writeCache(this.cache.poolPledge, key, BigInt(poolInfo.live_pledge));
+    } catch {
+      return this.writeCache(this.cache.poolPledge, key, null);
+    }
+  }
+
+  /** Get SPO live pledge via its stake credential (resolved active pool). */
+  async getSPOLivePledge(stakeAddress: string): Promise<bigint | null> {
+    const key = stakeAddress.trim();
+    const cached = this.readCache(this.cache.spoPledge, key);
+    if (cached !== undefined) return cached;
+    try {
+      const account = await this.getAccountInfo(stakeAddress);
+      const poolId = account?.pool_id;
+      if (!poolId) return this.writeCache(this.cache.spoPledge, key, null);
+      const pledge = await this.getPoolLivePledge(poolId);
+      return this.writeCache(this.cache.spoPledge, key, pledge);
+    } catch {
+      return this.writeCache(this.cache.spoPledge, key, null);
     }
   }
 

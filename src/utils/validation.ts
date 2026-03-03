@@ -13,9 +13,15 @@ import type {
   RoleWeighting,
 } from '../types/survey.ts';
 import {
-  METHOD_SINGLE_CHOICE,
-  METHOD_MULTI_SELECT,
-  METHOD_NUMERIC_RANGE,
+  DEFAULT_CUSTOM_METHOD_URN,
+  DEFAULT_FREETEXT_SCHEMA_HASH,
+  DEFAULT_FREETEXT_SCHEMA_URI,
+  SPEC_VERSION,
+} from '../constants/methodTypes.ts';
+import {
+  METHOD_SINGLE_CHOICE as METHOD_SINGLE_CHOICE_URN,
+  METHOD_MULTI_SELECT as METHOD_MULTI_SELECT_URN,
+  METHOD_NUMERIC_RANGE as METHOD_NUMERIC_RANGE_URN,
 } from '../types/survey.ts';
 
 export interface ValidationResult {
@@ -26,9 +32,9 @@ export interface ValidationResult {
 const HEX64_REGEX = /^[0-9a-fA-F]{64}$/;
 
 function isBuiltinMethod(method: MethodType): boolean {
-  return method === METHOD_SINGLE_CHOICE ||
-    method === METHOD_MULTI_SELECT ||
-    method === METHOD_NUMERIC_RANGE;
+  return method === METHOD_SINGLE_CHOICE_URN ||
+    method === METHOD_MULTI_SELECT_URN ||
+    method === METHOD_NUMERIC_RANGE_URN;
 }
 
 function getQuestions(details: SurveyDetails): SurveyQuestion[] {
@@ -100,7 +106,11 @@ function validateRoleWeighting(roleWeighting: RoleWeighting | undefined): string
 export function validateSurveyDetails(details: SurveyDetails): ValidationResult {
   const errors: string[] = [];
 
-  if (!details.specVersion) errors.push('specVersion is required');
+  if (!details.specVersion) {
+    errors.push('specVersion is required');
+  } else if (details.specVersion !== SPEC_VERSION) {
+    errors.push(`specVersion must be exactly "${SPEC_VERSION}"`);
+  }
   if (!details.title?.trim()) errors.push('title is required');
   if (!details.description?.trim()) errors.push('description is required');
 
@@ -128,7 +138,7 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
     if (q.questionId) questionIds.add(q.questionId);
 
     const method = q.methodType as MethodType;
-    if (method === METHOD_SINGLE_CHOICE) {
+    if (method === METHOD_SINGLE_CHOICE_URN) {
       if (!q.options || q.options.length < 2) {
         errors.push(`${prefix}: single-choice requires options with at least 2 values`);
       }
@@ -138,7 +148,7 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
       if (q.numericConstraints !== undefined) {
         errors.push(`${prefix}: single-choice numericConstraints must be absent`);
       }
-    } else if (method === METHOD_MULTI_SELECT) {
+    } else if (method === METHOD_MULTI_SELECT_URN) {
       if (!q.options || q.options.length < 2) {
         errors.push(`${prefix}: multi-select requires options with at least 2 values`);
       }
@@ -151,7 +161,7 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
       if (q.numericConstraints !== undefined) {
         errors.push(`${prefix}: multi-select numericConstraints must be absent`);
       }
-    } else if (method === METHOD_NUMERIC_RANGE) {
+    } else if (method === METHOD_NUMERIC_RANGE_URN) {
       if (!q.numericConstraints) {
         errors.push(`${prefix}: numeric-range requires numericConstraints`);
       } else {
@@ -179,13 +189,22 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
       if (!q.methodSchemaUri?.trim()) {
         errors.push(`${prefix}: custom methods require methodSchemaUri`);
       }
-      if (q.hashAlgorithm !== undefined && q.hashAlgorithm !== 'blake2b-256') {
-        errors.push(`${prefix}: if provided, hashAlgorithm must be "blake2b-256"`);
-      }
       if (!q.methodSchemaHash?.trim()) {
         errors.push(`${prefix}: custom methods require methodSchemaHash`);
       } else if (!HEX64_REGEX.test(q.methodSchemaHash)) {
         errors.push(`${prefix}: methodSchemaHash must be a 64-char hex string`);
+      }
+      if (q.methodType !== DEFAULT_CUSTOM_METHOD_URN) {
+        errors.push(`${prefix}: unsupported custom methodType "${q.methodType}"`);
+      }
+      if (q.methodSchemaUri !== DEFAULT_FREETEXT_SCHEMA_URI) {
+        errors.push(`${prefix}: unsupported methodSchemaUri for free-text`);
+      }
+      if (q.methodSchemaHash !== DEFAULT_FREETEXT_SCHEMA_HASH) {
+        errors.push(`${prefix}: methodSchemaHash must match the free-text schema bytes`);
+      }
+      if (q.hashAlgorithm !== undefined) {
+        errors.push(`${prefix}: custom methods must not include hashAlgorithm`);
       }
     }
 
@@ -194,12 +213,12 @@ export function validateSurveyDetails(details: SurveyDetails): ValidationResult 
       if (q.methodSchemaUri !== undefined) {
         errors.push(`${prefix}: built-in methods must not include methodSchemaUri`);
       }
-      if (q.hashAlgorithm !== undefined) {
-        errors.push(`${prefix}: built-in methods must not include hashAlgorithm`);
-      }
       if (q.methodSchemaHash !== undefined) {
         errors.push(`${prefix}: built-in methods must not include methodSchemaHash`);
       }
+    }
+    if (q.hashAlgorithm !== undefined) {
+      errors.push(`${prefix}: hashAlgorithm is not supported in this tool`);
     }
   });
 
@@ -214,7 +233,11 @@ export function validateSurveyResponse(
 ): ValidationResult {
   const errors: string[] = [];
 
-  if (!response.specVersion) errors.push('specVersion is required');
+  if (!response.specVersion) {
+    errors.push('specVersion is required');
+  } else if (response.specVersion !== SPEC_VERSION) {
+    errors.push(`specVersion must be exactly "${SPEC_VERSION}"`);
+  }
   if (!HEX64_REGEX.test(response.surveyTxId)) {
     errors.push('surveyTxId must be a 64-char hex string');
   }
@@ -261,7 +284,11 @@ export function validateSurveyResponse(
     }
 
     const method = question.methodType;
-    if (method === METHOD_SINGLE_CHOICE) {
+    if (!isBuiltinMethod(method) && method !== DEFAULT_CUSTOM_METHOD_URN) {
+      errors.push(`${prefix}: unsupported custom methodType "${method}"`);
+      continue;
+    }
+    if (method === METHOD_SINGLE_CHOICE_URN) {
       if (!hasSelection) {
         errors.push(`${prefix}: single-choice answer must use selection`);
       } else if (answer.selection!.length !== 1) {
@@ -274,7 +301,7 @@ export function validateSurveyResponse(
           errors.push(`${prefix}: selection index ${idxVal} is out of range`);
         }
       }
-    } else if (method === METHOD_MULTI_SELECT) {
+    } else if (method === METHOD_MULTI_SELECT_URN) {
       if (!hasSelection) {
         errors.push(`${prefix}: multi-select answer must use selection`);
       } else {
@@ -291,7 +318,7 @@ export function validateSurveyResponse(
           }
         }
       }
-    } else if (method === METHOD_NUMERIC_RANGE) {
+    } else if (method === METHOD_NUMERIC_RANGE_URN) {
       if (!hasNumeric) {
         errors.push(`${prefix}: numeric-range answer must use numericValue`);
       } else if (question.numericConstraints) {
@@ -310,6 +337,8 @@ export function validateSurveyResponse(
       }
     } else if (!hasCustom) {
       errors.push(`${prefix}: custom method answer must use customValue`);
+    } else if (typeof answer.customValue !== 'string') {
+      errors.push(`${prefix}: free-text customValue must be a string`);
     }
   }
 

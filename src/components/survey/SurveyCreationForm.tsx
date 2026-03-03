@@ -38,9 +38,6 @@ interface Props {
 interface QuestionDraft {
   question: string;
   methodType: MethodType;
-  customMethodType: string;
-  methodSchemaUri: string;
-  methodSchemaHash: string;
   options: string[];
   maxSelections: number;
   numericConstraints: NumericConstraints;
@@ -59,9 +56,6 @@ export function SurveyCreationForm({ onCreated }: Props) {
     {
       question: '',
       methodType: METHOD_SINGLE_CHOICE,
-      customMethodType: DEFAULT_CUSTOM_METHOD_URN,
-      methodSchemaUri: DEFAULT_FREETEXT_SCHEMA_URI,
-      methodSchemaHash: DEFAULT_FREETEXT_SCHEMA_HASH,
       options: ['', ''],
       maxSelections: 1,
       numericConstraints: { minValue: 0, maxValue: 100 },
@@ -110,7 +104,7 @@ export function SurveyCreationForm({ onCreated }: Props) {
     const base: SurveyQuestion = {
       questionId: `q${index + 1}`,
       question: draft.question.trim(),
-      methodType: isCustom ? draft.customMethodType.trim() : draft.methodType,
+      methodType: isCustom ? DEFAULT_CUSTOM_METHOD_URN : draft.methodType,
     };
 
     if (draft.methodType === METHOD_SINGLE_CHOICE) {
@@ -121,9 +115,8 @@ export function SurveyCreationForm({ onCreated }: Props) {
     } else if (draft.methodType === METHOD_NUMERIC_RANGE) {
       base.numericConstraints = draft.numericConstraints;
     } else {
-      base.methodSchemaUri = draft.methodSchemaUri.trim();
-      base.hashAlgorithm = 'blake2b-256';
-      base.methodSchemaHash = draft.methodSchemaHash.trim();
+      base.methodSchemaUri = DEFAULT_FREETEXT_SCHEMA_URI;
+      base.methodSchemaHash = DEFAULT_FREETEXT_SCHEMA_HASH;
     }
 
     return base;
@@ -310,9 +303,6 @@ export function SurveyCreationForm({ onCreated }: Props) {
       {
         question: '',
         methodType: METHOD_SINGLE_CHOICE,
-        customMethodType: DEFAULT_CUSTOM_METHOD_URN,
-        methodSchemaUri: DEFAULT_FREETEXT_SCHEMA_URI,
-        methodSchemaHash: DEFAULT_FREETEXT_SCHEMA_HASH,
         options: ['', ''],
         maxSelections: 1,
         numericConstraints: { minValue: 0, maxValue: 100 },

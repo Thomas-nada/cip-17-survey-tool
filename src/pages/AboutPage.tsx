@@ -31,7 +31,7 @@ export function AboutPage() {
           </div>
           <p className="text-sm text-slate-300 leading-relaxed">
             A survey is published with <span className="font-code">surveyDetails</span> including title, description, and one or more questions.
-            Each question carries its own method type (single choice, multi-select, numeric range, or custom), while role weighting and end epoch are set at survey level.
+            Each question carries its own method type (single choice, multi-select, numeric range, or a fixed custom free-text method), while role weighting and end epoch are set at survey level.
           </p>
         </div>
         <div className="bg-slate-800/20 border border-slate-700/30 rounded-xl p-5">
@@ -88,6 +88,8 @@ export function AboutPage() {
         <ul className="text-sm text-slate-300 space-y-2 leading-relaxed list-disc pl-5">
           <li>Latest valid response per (role, credential) is counted (older valid responses are superseded).</li>
           <li>Weighting is applied per role according to roleWeighting.</li>
+          <li>At/after endEpoch, responses are re-verified before tally inclusion.</li>
+          <li>PledgeBased uses SPO live pledge (not declared pledge).</li>
           <li>For multi-role surveys, canonical outputs are per-role; any combined "All roles" view is non-canonical.</li>
           <li>Tallies are computed per question, supporting mixed question types in one survey.</li>
           <li>For multi-select, empty selection is valid and means no options selected.</li>
@@ -108,7 +110,13 @@ export function AboutPage() {
       "endEpoch": 1234,
       "questions": [
         { "questionId": "q1", "question": "...", "methodType": "..." },
-        { "questionId": "q2", "question": "...", "methodType": "urn:cardano:poll-method:custom:v1" }
+        {
+          "questionId": "q2",
+          "question": "...",
+          "methodType": "urn:cardano:poll-method:custom:v1",
+          "methodSchemaUri": "ipfs://QmQ3amnfu4zkEv58W4eGqtBiuk1mLy9Gk3DAAaxdAq4YgB",
+          "methodSchemaHash": "e8e33f3d0f167c1201a48fc55b3a882ae173203759f8884c0c15567db6620a9d"
+        }
       ]
     }
   }

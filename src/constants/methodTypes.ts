@@ -7,8 +7,9 @@ import {
 export const SPEC_VERSION = '1.0.0';
 export const METADATA_LABEL = 17;
 export const DEFAULT_CUSTOM_METHOD_URN = 'urn:cardano:poll-method:custom:v1';
-export const DEFAULT_FREETEXT_SCHEMA_URI = 'urn:cardano:poll-method-schema:freetext:v1';
-export const DEFAULT_FREETEXT_SCHEMA_HASH = '0000000000000000000000000000000000000000000000000000000000000000';
+export const DEFAULT_FREETEXT_SCHEMA_URI = 'ipfs://QmQ3amnfu4zkEv58W4eGqtBiuk1mLy9Gk3DAAaxdAq4YgB';
+// blake2b-256 over the exact raw bytes in schemas/freetext-method-v1.schema.json
+export const DEFAULT_FREETEXT_SCHEMA_HASH = 'e8e33f3d0f167c1201a48fc55b3a882ae173203759f8884c0c15567db6620a9d';
 
 export const BUILTIN_METHODS = [
   {

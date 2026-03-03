@@ -408,6 +408,7 @@ export function TallyDashboard({ survey }: Props) {
         if (cancelled) return;
         const cred = resp.responseCredential;
         const role = resp.responderRole;
+        const roleMode = configuredRoleWeighting[role];
         let power = 0n;
         try {
           if (role === 'DRep') {
@@ -417,6 +418,30 @@ export function TallyDashboard({ survey }: Props) {
               const info = await blockfrostClient.getDRepInfo(cred);
               power = info && !info.retired && info.amount ? BigInt(info.amount) : 0n;
               drepPower.set(cred, power);
+            }
+          } else if (role === 'SPO' && roleMode === 'PledgeBased') {
+            if (cred.startsWith('pool')) {
+              if (poolPower.has(`pledge:${cred}`)) {
+                power = poolPower.get(`pledge:${cred}`) ?? 0n;
+              } else {
+                const p = await blockfrostClient.getPoolLivePledge(cred);
+                power = p ?? 0n;
+                poolPower.set(`pledge:${cred}`, power);
+              }
+            } else {
+              const stakeAddress = await resolveStakeAddressForLookup(
+                blockfrostClient,
+                resp.voterAddress,
+                cred
+              );
+              const cacheKey = stakeAddress ? `pledge:${stakeAddress}` : `pledge:${cred}`;
+              if (spoPower.has(cacheKey)) {
+                power = spoPower.get(cacheKey) ?? 0n;
+              } else if (stakeAddress) {
+                const p = await blockfrostClient.getSPOLivePledge(stakeAddress);
+                power = p ?? 0n;
+                spoPower.set(cacheKey, power);
+              }
             }
           } else if (role === 'SPO') {
             if (cred.startsWith('pool')) {
@@ -464,6 +489,9 @@ export function TallyDashboard({ survey }: Props) {
         // Keep lookup compatibility for tallying and response table rendering.
         next.set(resp.txId, power);
         next.set(cred, power);
+        if (role === 'SPO' && roleMode === 'PledgeBased') {
+          next.set(`pledge:${cred}`, power);
+        }
         if (resp.voterAddress) next.set(resp.voterAddress, power);
       }
 
@@ -502,6 +530,7 @@ export function TallyDashboard({ survey }: Props) {
     surveyEndEpoch,
     currentEpoch,
     snapshotStorageKey,
+    configuredRoleWeighting,
   ]);
 
   // Fetch stake amounts for unique voters when StakeBased
@@ -526,6 +555,20 @@ export function TallyDashboard({ survey }: Props) {
         if (cancelled) return;
         try {
           const cred = resp.responseCredential;
+          const roleMode = configuredRoleWeighting[resp.responderRole];
+          if (resp.responderRole === 'SPO' && roleMode === 'PledgeBased') {
+            let pledge = 0n;
+            if (cred.startsWith('pool')) {
+              pledge = (await blockfrostClient.getPoolLivePledge(cred)) ?? 0n;
+            } else {
+              const stakeAddress = await resolveStakeAddressForLookup(blockfrostClient, resp.voterAddress, cred);
+              pledge = stakeAddress ? ((await blockfrostClient.getSPOLivePledge(stakeAddress)) ?? 0n) : 0n;
+            }
+            map.set(resp.txId, pledge);
+            map.set(cred, pledge);
+            map.set(`pledge:${cred}`, pledge);
+            continue;
+          }
           let lookupAddress = resp.voterAddress ?? cred;
 
           // Deterministic fallback: use tx input address when available.
@@ -578,7 +621,15 @@ export function TallyDashboard({ survey }: Props) {
     })();
 
     return () => { cancelled = true; };
-  }, [isStakeBased, filteredResponses, isOnChainMode, blockfrostClient, surveyClosed, snapshotStakeMap]);
+  }, [
+    isStakeBased,
+    filteredResponses,
+    isOnChainMode,
+    blockfrostClient,
+    surveyClosed,
+    snapshotStakeMap,
+    configuredRoleWeighting,
+  ]);
 
   // Role-aware display voting power for the response list:
   // DRep/SPO => delegated power, CC => 1 vote, Stakeholder => wallet amount.

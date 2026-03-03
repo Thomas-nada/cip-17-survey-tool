@@ -13,6 +13,7 @@ import type {
   StoredResponse,
   EligibilityRole,
   RoleWeighting,
+  VoteWeighting,
   CreateSurveyResult,
   SubmitResponseResult,
 } from '../types/survey.ts';
@@ -424,6 +425,119 @@ export class TestnetBlockchain implements BlockchainService {
       return details.eligibility;
     }
     return [];
+  }
+
+  private inferRoleFromVotingVoter(voter: unknown): EligibilityRole | undefined {
+    if (!voter) return undefined;
+    let s = '';
+    try {
+      s = JSON.stringify(voter, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)).toLowerCase();
+    } catch {
+      s = String(voter).toLowerCase();
+    }
+    if (s.includes('drep')) return 'DRep';
+    if (s.includes('stakepool') || s.includes('stake_pool') || s.includes('pool')) return 'SPO';
+    if (s.includes('committee') || s.includes('cc')) return 'CC';
+    return undefined;
+  }
+
+  private extractCredentialHint(voter: unknown): string | undefined {
+    const search = (obj: unknown): string | undefined => {
+      if (typeof obj === 'string') {
+        const v = obj.trim();
+        if (v.startsWith('drep') || v.startsWith('pool') || v.startsWith('cc_cold') || v.startsWith('stake')) {
+          return v;
+        }
+        return undefined;
+      }
+      if (Array.isArray(obj)) {
+        for (const item of obj) {
+          const found = search(item);
+          if (found) return found;
+        }
+        return undefined;
+      }
+      if (obj && typeof obj === 'object') {
+        for (const value of Object.values(obj as Record<string, unknown>)) {
+          const found = search(value);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    };
+    return search(voter);
+  }
+
+  private async getTxBodyEvidence(txHash: string): Promise<{
+    hasVotingProcedures: boolean;
+    voterEntryCount: number;
+    govActionEntryCount: number;
+    inferredRole?: EligibilityRole;
+    inferredCredential?: string;
+    requiredSignerCount: number;
+  } | null> {
+    try {
+      const txCbor = await this.blockfrost.getTransactionCbor(txHash);
+      const cborHex = txCbor?.cbor?.trim();
+      if (!cborHex) return null;
+
+      const Serialization = (coreCst as any)?.Serialization;
+      const tx = Serialization?.Transaction?.fromCbor?.(cborHex);
+      const coreTx = tx?.toCore?.();
+      const body = (coreTx?.body ?? coreTx ?? {}) as any;
+
+      const voting = body?.votingProcedures;
+      const reqSigners = body?.requiredExtraSignatures ?? body?.requiredSigners;
+      const requiredSignerCount =
+        reqSigners instanceof Set ? reqSigners.size :
+          Array.isArray(reqSigners) ? reqSigners.length :
+            reqSigners && typeof reqSigners === 'object' ? Object.keys(reqSigners).length : 0;
+
+      if (!voting) {
+        return {
+          hasVotingProcedures: false,
+          voterEntryCount: 0,
+          govActionEntryCount: 0,
+          requiredSignerCount,
+        };
+      }
+
+      let entries: Array<[unknown, unknown]> = [];
+      if (voting instanceof Map) {
+        entries = Array.from(voting.entries());
+      } else if (Array.isArray(voting)) {
+        entries = (voting as unknown[]).map((v, i) => [i, v]);
+      } else if (typeof voting === 'object') {
+        entries = Object.entries(voting as Record<string, unknown>);
+      }
+
+      let govActionEntryCount = 0;
+      let inferredRole: EligibilityRole | undefined;
+      let inferredCredential: string | undefined;
+      if (entries.length === 1) {
+        const [voter, procedures] = entries[0];
+        inferredRole = this.inferRoleFromVotingVoter(voter);
+        inferredCredential = this.extractCredentialHint(voter);
+        if (procedures instanceof Map) {
+          govActionEntryCount = procedures.size;
+        } else if (Array.isArray(procedures)) {
+          govActionEntryCount = procedures.length;
+        } else if (procedures && typeof procedures === 'object') {
+          govActionEntryCount = Object.keys(procedures as Record<string, unknown>).length;
+        }
+      }
+
+      return {
+        hasVotingProcedures: true,
+        voterEntryCount: entries.length,
+        govActionEntryCount,
+        inferredRole,
+        inferredCredential,
+        requiredSignerCount,
+      };
+    } catch {
+      return null;
+    }
   }
 
   private async deriveResponderIdentity(
@@ -947,6 +1061,9 @@ export class TestnetBlockchain implements BlockchainService {
       ) as RoleWeighting;
       const responses: StoredResponse[] = [];
       const epochBySlot = new Map<number, number | null>();
+      const txEvidenceByHash = new Map<string, Awaited<ReturnType<TestnetBlockchain['getTxBodyEvidence']>>>();
+      const latestEpochInfo = await this.blockfrost.getLatestEpoch().catch(() => null);
+      const latestEpoch = typeof latestEpochInfo?.epoch === 'number' ? latestEpochInfo.epoch : null;
 
       for (const entry of entries) {
         if (
@@ -982,7 +1099,8 @@ export class TestnetBlockchain implements BlockchainService {
                 responseEpoch = block?.epoch ?? null;
                 epochBySlot.set(txInfo.slot, responseEpoch);
               }
-              if (responseEpoch !== null && responseEpoch > surveyDetails.endEpoch) {
+              // Strict epoch semantics: responseEpoch must be derivable and <= endEpoch.
+              if (responseEpoch === null || responseEpoch > surveyDetails.endEpoch) {
                 continue;
               }
 
@@ -995,7 +1113,52 @@ export class TestnetBlockchain implements BlockchainService {
               if (!derived.valid || !derived.role || !derived.credential) {
                 continue;
               }
+
+              let txEvidence = txEvidenceByHash.get(entry.tx_hash);
+              if (txEvidence === undefined) {
+                txEvidence = await this.getTxBodyEvidence(entry.tx_hash);
+                txEvidenceByHash.set(entry.tx_hash, txEvidence);
+              }
+
+              // If tx body carries voting procedures, enforce stricter role-evidence checks.
+              // This aligns with CIP guidance to use tx-body evidence when present.
+              if (txEvidence?.hasVotingProcedures) {
+                if (txEvidence.voterEntryCount !== 1) continue;
+                if (txEvidence.govActionEntryCount !== 1) continue;
+                if (
+                  txEvidence.inferredRole &&
+                  txEvidence.inferredRole !== resp.responderRole
+                ) {
+                  continue;
+                }
+              }
+
+              // Phase 2 re-verification (tally-time) once survey reaches endEpoch.
+              let tallyTimeVerified = true;
+              let tallyTimeReason: string | undefined;
+              if (latestEpoch !== null && latestEpoch >= surveyDetails.endEpoch) {
+                const recheck = await this.deriveResponderIdentity(
+                  voterAddress,
+                  roleWeighting,
+                  resp.responderRole
+                );
+                if (!recheck.valid || !recheck.role || !recheck.credential) {
+                  tallyTimeVerified = false;
+                  tallyTimeReason = recheck.reason ?? 'tally-time identity re-verification failed';
+                } else if (
+                  txEvidence?.hasVotingProcedures &&
+                  txEvidence.inferredRole &&
+                  txEvidence.inferredRole !== resp.responderRole
+                ) {
+                  tallyTimeVerified = false;
+                  tallyTimeReason = 'tally-time voting_procedures role mismatch';
+                }
+              }
               const metadataPos = (entry as { metadata_position?: unknown }).metadata_position;
+              const roleWeight = roleWeighting[derived.role] as VoteWeighting | undefined;
+              const submitPowerLovelace = roleWeight === 'CredentialBased'
+                ? '1000000'
+                : undefined;
 
               responses.push({
                 txId: entry.tx_hash,
@@ -1003,9 +1166,10 @@ export class TestnetBlockchain implements BlockchainService {
                 responseCredential: derived.credential,
                 claimedCredential: undefined,
                 voterAddress,
-                identityVerified: true,
-                identityVerificationReason: undefined,
+                identityVerified: tallyTimeVerified,
+                identityVerificationReason: tallyTimeReason,
                 timestampMs: typeof txInfo.block_time === 'number' ? txInfo.block_time * 1000 : undefined,
+                submitPowerLovelace,
                 surveyTxId: resp.surveyTxId,
                 surveyHash: resp.surveyHash,
                 answers: resp.answers,
